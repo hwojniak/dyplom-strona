@@ -14,7 +14,7 @@ let addTextButton;
 
 // Layout constants matching the reference image
 const HEADER_HEIGHT = 80;
-const CANVAS_AREA_W = 500;
+const CANVAS_AREA_W = 500; // << This is the CONST definition
 let CANVAS_AREA_H; // Calculated in setup based on ratio
 let CANVAS_AREA_X; // Calculated in setup
 let CANVAS_AREA_Y; // Calculated in setup
@@ -46,7 +46,7 @@ const TEXT_OPTIONS = [
 let baseFont = 'monospace'; // Changed from Courier New as monospace is more common/likely system font
 
 // Rotation snapping increment (e.g., 15 degrees converted to radians)
-// >> THIS LINE MUST BE 'let', NOT 'const' <<
+// >> DECLARE AS LET GLOBALLY <<
 let SNAP_INCREMENT_RADIANS; // Declared globally, Initialized in setup() using radians()
 
 // Define size categories for shapes to control distribution
@@ -151,8 +151,6 @@ class FloatingShape {
     this.landFrame = -1;
     this.tempScaleEffect = 1; // Reset animation effect
     // this.tempOffsetY = 0; // Reset bounce
-
-    // >> ENSURE NO const DECLARATION FOR SNAP_INCREMENT_RADIANS IS HERE <<
   }
 
   // Update movement for floating shapes
@@ -364,31 +362,31 @@ class FloatingShape {
 // --- End FloatingShape Class ---
 
 
-function preload() { // Likely starts around line 369 based on previous error
+function preload() { // Likely starts around line 369 based on previous error location
   // Attempt to load a specific font if you have a file, e.g., a pixel font
   // try {
   //   baseFont = loadFont('path/to/your/pixel_font.ttf');
   //   console.log("Custom font loaded successfully.");
   // } catch (e) {
-     console.warn("Custom font not loaded, using default:", baseFont); // <-- This is line 375 according to error
+     console.warn("Custom font not loaded, using default:", baseFont); // <-- Line 375 example
   // }
 }
 
-function setup() { // Likely starts around line 383 based on previous error
+function setup() { // Likely starts around line 383 based on previous error location
   // Match the target resolution better
   createCanvas(1000, 1400);
 
   // --- Initialize P5.js dependent variables here ---
   // Now radians() is available after createCanvas()
   // >> ASSIGN TO THE GLOBAL LET VARIABLE <<
-  // >> THIS IS LINE 390 ACCORDING TO YOUR ERROR <<
-  SNAP_INCREMENT_RADIANS = radians(15); // This should now assign correctly to the global LET variable
+  SNAP_INCREMENT_RADIANS = radians(15); // <-- This line is around 390
   // ---------------------------------------------
 
   // Calculate central canvas area dimensions based on fixed width and 4:5 ratio (W:H)
-  CANVAS_AREA_W = 500; // Keep width fixed
-  CANVAS_AREA_H = CANVAS_AREA_W * (5 / 4); // Height = Width * 5/4
-  CANVAS_AREA_X = width / 2 - CANVAS_AREA_W / 2;
+  // >> REMOVE THE RE-ASSIGNMENT OF THE CONST VARIABLE <<
+  // CANVAS_AREA_W = 500; // REMOVE THIS LINE
+  CANVAS_AREA_H = CANVAS_AREA_W * (5 / 4); // Height = Width * 5/4 (Uses the global const)
+  CANVAS_AREA_X = width / 2 - CANVAS_AREA_W / 2; // Uses the global const
   // Calculate CANVAS_AREA_Y to center the white canvas vertically within the space below the header
   // Total usable vertical space = height - HEADER_HEIGHT
   // Space needed for canvas area = CANVAS_AREA_H
@@ -645,7 +643,12 @@ function mouseReleased() {
 
       // --- Apply Rotation Snapping Here ---
       // SNAP_INCREMENT_RADIANS is initialized in setup()
-      grabbedItem.rotation = snapAngle(grabbedItem.rotation, SNAP_INCREMENT_RADIANS);
+      // Check if SNAP_INCREMENT_RADIANS has been successfully initialized (prevents error if setup() crashed)
+      if (SNAP_INCREMENT_RADIANS !== undefined) {
+        grabbedItem.rotation = snapAngle(grabbedItem.rotation, SNAP_INCREMENT_RADIANS);
+      } else {
+           console.warn("SNAP_INCREMENT_RADIANS is undefined, skipping snap.");
+      }
       // -----------------------------------
 
       placedItems.push(grabbedItem);
@@ -885,9 +888,9 @@ function windowResized() {
     resizeCanvas(1000, 1400);
 
     // Recalculate CANVAS_AREA dimensions based on the fixed W and ratio
-    // CANVAS_AREA_W = 500; // Keep width fixed
-    CANVAS_AREA_H = CANVAS_AREA_W * (5 / 4); // 4:5 ratio H = W * 5/4
-    CANVAS_AREA_X = width / 2 - CANVAS_AREA_W / 2;
+    // CANVAS_AREA_W is a const, do not re-assign it here. It takes its value from the global const.
+    CANVAS_AREA_H = CANVAS_AREA_W * (5 / 4); // Height = Width * 5/4 (Uses the global const CANVAS_AREA_W)
+    CANVAS_AREA_X = width / 2 - CANVAS_AREA_W / 2; // Uses the global const CANVAS_AREA_W
     // Calculate CANVAS_AREA_Y to center the white canvas vertically within the space below the header
     CANVAS_AREA_Y = HEADER_HEIGHT + ((height - HEADER_HEIGHT) - CANVAS_AREA_H) / 2;
      // Ensure it's not placed too high if canvas is small
@@ -919,10 +922,11 @@ function windowResized() {
 
     // Recreate graphics buffer if canvas area size changes (essential after recalculating CANVAS_AREA_H)
     if (canvasPG) {
-      canvasPG.resizeCanvas(CANVAS_AREA_W, CANVAS_AREA_H); // Resize the buffer
+      canvasPG.resizeCanvas(CANVAS_AREA_W, CANVAS_AREA_H); // Resize the buffer (Uses global CANVAS_AREA_W/H)
     } else {
          // Should ideally only create in setup, but resizeCanvas might fail if not previously created
          // if this is called very early before setup completes. Adding a check.
+         // Uses global CANVAS_AREA_W/H
          if(CANVAS_AREA_W > 0 && CANVAS_AREA_H > 0) { // Ensure dimensions are valid
              canvasPG = createGraphics(CANVAS_AREA_W, CANVAS_AREA_H);
          }
