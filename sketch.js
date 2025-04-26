@@ -10,8 +10,7 @@ let saveButton;
 let randomButton;
 let restartButton;
 let addTextButton;
-let scaleUpButton;   // New Scale Up button
-let scaleDownButton; // New Scale Down button
+// scaleUpButton and scaleDownButton are removed per user request
 
 // Layout constants matching the reference image
 const HEADER_HEIGHT = 80;
@@ -47,8 +46,7 @@ const TEXT_OPTIONS = [
 let baseFont = 'monospace'; // Changed from Courier New as monospace is more common/likely system font
 
 // Rotation snapping increment (e.g., 15 degrees converted to radians)
-// Declare it here, but assign the value using radians() inside setup()
-let SNAP_INCREMENT_RADIANS;
+let SNAP_INCREMENT_RADIANS; // Initialized in setup()
 
 // Define size categories for shapes to control distribution
 const sizeCategories = [
@@ -101,7 +99,6 @@ class FloatingShape {
         this.speedY = random(minSpeed, maxSpeed); // Faster main speed downwards
         break;
       case 1: // Right
-        // --- The problematic line "thiscelerated by..." was here and is now removed ---
         this.x = width + this.currentSize * random(0.5, 1.5); // Start just outside to further off
         this.y = height * posAlong;
         this.speedX = random(-maxSpeed, -minSpeed); // Faster main speed left
@@ -334,12 +331,13 @@ class FloatingShape {
        if (this.type === 'text') {
            // Approximating hit area for text based on size and scale
            // Use max of a base size or scaled size portion
-           hitRadius = max(40, this.size * this.scaleFactor * 0.4); // Adjust 0.4 multiplier as needed for text hit area feel
-
+           // Increased the base hit radius for text significantly
+           hitRadius = max(60, this.size * this.scaleFactor * 0.5); // Adjust multiplier as needed
        } else { // It's a shape
            // For shapes, radius is size/2 * scaleFactor
            hitRadius = this.size * this.scaleFactor / 2;
-             hitRadius = max(30, hitRadius); // Ensure minimum hit area for small shapes
+            // Increased the minimum hit area for small shapes
+            hitRadius = max(40, hitRadius); // Ensure minimum hit area for small shapes
        }
 
 
@@ -382,9 +380,18 @@ function setup() {
   // ---------------------------------------------
 
   // Calculate central canvas area dimensions based on fixed width and 4:5 ratio (W:H)
+  CANVAS_AREA_W = 500; // Keep width fixed
   CANVAS_AREA_H = CANVAS_AREA_W * (5 / 4); // Height = Width * 5/4
   CANVAS_AREA_X = width / 2 - CANVAS_AREA_W / 2;
-  CANVAS_AREA_Y = HEADER_HEIGHT + 20; // Position below header with some margin
+  // Calculate CANVAS_AREA_Y to center the white canvas vertically within the space below the header
+  // Total usable vertical space = height - HEADER_HEIGHT
+  // Space needed for canvas area = CANVAS_AREA_H
+  // Remaining vertical space = (height - HEADER_HEIGHT) - CANVAS_AREA_H
+  // Top margin = Remaining vertical space / 2
+  CANVAS_AREA_Y = HEADER_HEIGHT + ((height - HEADER_HEIGHT) - CANVAS_AREA_H) / 2;
+  // Ensure it's not placed too high if canvas is small
+  CANVAS_AREA_Y = max(HEADER_HEIGHT + 10, CANVAS_AREA_Y); // Minimum 10px below header
+
 
   // Setup UI elements (adjust positions)
   inputElement = createInput(random(TEXT_OPTIONS.slice(1))); // Start with random text
@@ -411,7 +418,7 @@ function setup() {
   // Button placement - align right of canvasAreaX and centered vertically in header
   let buttonXStart = CANVAS_AREA_X + CANVAS_AREA_W + 20; // Right of the central canvas
   let buttonSpacing = 10;
-  let buttonPadY = 15; // Vertical padding for non-scale buttons
+  let buttonPadY = 15; // Vertical padding
 
   randomButton = createButton("RANDOM");
   randomButton.position(buttonXStart, HEADER_HEIGHT / 2 - buttonPadY);
@@ -420,18 +427,22 @@ function setup() {
   randomButton.style("border-radius", "20px");
   randomButton.style("background-color", color(200));
   randomButton.style("color", color(50));
+  // RANDOM button should reset floating shapes, leave placed items
   randomButton.mousePressed(resetRandom);
 
   restartButton = createButton("RESTART");
+  // Position RESTART relative to RANDOM
   restartButton.position(randomButton.x + randomButton.width + buttonSpacing, HEADER_HEIGHT / 2 - buttonPadY);
   restartButton.style("padding", "8px 20px");
   restartButton.style("border", "1px solid #888");
   restartButton.style("border-radius", "20px");
   restartButton.style("background-color", color(200));
   restartButton.style("color", color(50));
+  // RESTART button should reset everything
   restartButton.mousePressed(restartAll);
 
   saveButton = createButton("SAVE");
+  // Position SAVE relative to RESTART
   saveButton.position(restartButton.x + restartButton.width + buttonSpacing, HEADER_HEIGHT / 2 - buttonPadY);
   saveButton.style("padding", "8px 20px");
   saveButton.style("border", "1px solid #888");
@@ -440,32 +451,7 @@ function setup() {
   saveButton.style("color", color(50));
   saveButton.mousePressed(saveCanvasArea);
 
-  // Add Scale Up/Down buttons next to SAVE
-  let scaleButtonY = HEADER_HEIGHT / 2 - buttonPadY;
-  let scaleButtonWidth = 30; // Small button width
-  let scaleButtonHeight = buttonPadY * 2; // Match vertical size of other buttons roughly
-
-  scaleUpButton = createButton("+");
-  scaleUpButton.position(saveButton.x + saveButton.width + buttonSpacing, scaleButtonY);
-  scaleUpButton.size(scaleButtonWidth, scaleButtonHeight);
-  scaleUpButton.style("padding", "0");
-  scaleUpButton.style("border", "1px solid #888");
-  scaleUpButton.style("border-radius", "5px");
-  scaleUpButton.style("background-color", color(200)); // Default grey
-  scaleUpButton.style("color", color(50));
-  scaleUpButton.style("font-size", "18px");
-  scaleUpButton.mousePressed(scaleUpItem);
-
-  scaleDownButton = createButton("-");
-  scaleDownButton.position(scaleUpButton.x + scaleUpButton.width + buttonSpacing, scaleButtonY);
-  scaleDownButton.size(scaleButtonWidth, scaleButtonHeight);
-  scaleDownButton.style("padding", "0");
-  scaleDownButton.style("border", "1px solid #888");
-  scaleDownButton.style("border-radius", "5px");
-  scaleDownButton.style("background-color", color(200)); // Default grey
-  scaleDownButton.style("color", color(50));
-  scaleDownButton.style("font-size", "18px");
-  scaleDownButton.mousePressed(scaleDownItem);
+  // scaleUpButton and scaleDownButton creation removed per user request
 
 
   // Create initial floating shapes - always off-screen now
@@ -529,11 +515,11 @@ function draw() {
   // Draw the graphics buffer containing the placed items onto the main canvas
   image(canvasPG, CANVAS_AREA_X, CANVAS_AREA_Y);
 
-  // Draw vertical separation lines
-  stroke(255, 150, 0); // Orange
-  strokeWeight(2);
-  line(width/2 - CANVAS_AREA_W/2 - 10, HEADER_HEIGHT, width/2 - CANVAS_AREA_W/2 - 10, height);
-  line(width/2 + CANVAS_AREA_W/2 + 10, HEADER_HEIGHT, width/2 + CANVAS_AREA_W/2 + 10, height);
+  // Draw vertical separation lines - REMOVED per user request
+  // stroke(255, 150, 0); // Orange
+  // strokeWeight(2);
+  // line(width/2 - CANVAS_AREA_W/2 - 10, HEADER_HEIGHT, width/2 - CANVAS_AREA_W/2 - 10, height);
+  // line(width/2 + CANVAS_AREA_W/2 + 10, HEADER_HEIGHT, width/2 + CANVAS_AREA_W/2 + 10, height);
 
 
   // Draw grabbed item on top of everything else with hover effect
@@ -568,33 +554,31 @@ function draw() {
   textAlign(CENTER, CENTER);
   textFont(baseFont); // Use the chosen font
 
-  let plCircleX = saveButton.x + saveButton.width + 25; // Align with button spacing
+  // Position PL elements relative to the last button (SAVE)
+  let plElementX = saveButton.x + saveButton.width + 25; // Align with button spacing
   let circleDiameter = 20;
   let circleSpacing = 10;
 
-  // Draw circles
   noStroke();
   fill(180); // A bit darker grey than header
-  ellipse(plCircleX, HEADER_HEIGHT / 2, circleDiameter);
-  ellipse(plCircleX + circleDiameter + circleSpacing, HEADER_HEIGHT / 2, circleDiameter);
+  ellipse(plElementX, HEADER_HEIGHT / 2, circleDiameter);
+  ellipse(plElementX + circleDiameter + circleSpacing, HEADER_HEIGHT / 2, circleDiameter);
 
-  // Draw PL text
   fill(50); // Text color
-  // Adjust text positioning slightly based on actual text height if needed
-  text("PL", plCircleX, HEADER_HEIGHT / 2 + 2); // +2 offset for better centering maybe
+  text("PL", plElementX, HEADER_HEIGHT / 2 + 2); // +2 offset for better centering maybe
 
-  // Update Scale button appearance based on grabbedItem state
-  if (grabbedItem) {
-    scaleUpButton.style("background-color", color(250, 100, 0)); // Orange when active
-    scaleUpButton.style("color", color(255));
-    scaleDownButton.style("background-color", color(250, 100, 0)); // Orange when active
-    scaleDownButton.style("color", color(255));
-  } else {
-    scaleUpButton.style("background-color", color(200)); // Grey when inactive
-    scaleUpButton.style("color", color(50));
-    scaleDownButton.style("background-color", color(200)); // Grey when inactive
-    scaleDownButton.style("color", color(50));
-  }
+  // Scale button appearance update removed as buttons are removed
+  // if (grabbedItem) {
+  //   scaleUpButton.style("background-color", color(250, 100, 0)); // Orange when active
+  //   scaleUpButton.style("color", color(255));
+  //   scaleDownButton.style("background-color", color(250, 100, 0)); // Orange when active
+  //   scaleDownButton.style("color", color(255));
+  // } else {
+  //   scaleUpButton.style("background-color", color(200)); // Grey when inactive
+  //   scaleUpButton.style("color", color(50));
+  //   scaleDownButton.style("background-color", color(200)); // Grey when inactive
+  //   scaleDownButton.style("color", color(50));
+  // }
   // --- END HEADER DRAWING ---
 }
 
@@ -669,7 +653,7 @@ function mouseReleased() {
       }
 
       // --- Apply Rotation Snapping Here ---
-      // SNAP_INCREMENT_RADIANS is now initialized in setup()
+      // SNAP_INCREMENT_RADIANS is initialized in setup()
       grabbedItem.rotation = snapAngle(grabbedItem.rotation, SNAP_INCREMENT_RADIANS);
       // -----------------------------------
 
@@ -714,7 +698,7 @@ function mouseWheel(event) {
 }
 
 function keyPressed() {
-    // Delete grabbed item
+    // Delete grabbed item (Backspace or Delete keys)
     if (grabbedItem && (keyCode === DELETE || keyCode === BACKSPACE)) {
         shapes = shapes.filter(s => s !== grabbedItem);
         placedItems = placedItems.filter(s => s !== grabbedItem);
@@ -724,34 +708,28 @@ function keyPressed() {
         return false;
     }
 
-    // Scale grabbed item using +/- keys (Removed as UI buttons added)
-    // if (grabbedItem) {
-    //   if (key === '+' || key === '=') grabbedItem.scaleFactor *= 1.1;
-    //   if (key === '-') grabbedItem.scaleFactor *= 0.9;
-    //    // Prevent default browser actions for +/- keys
-    //     return false;
-    // }
+    // Scale grabbed item using +/- keys (Reinstated)
+    if (grabbedItem) {
+      if (key === '+' || key === '=') { // '+' or '=' for scale up
+          grabbedItem.scaleFactor *= 1.1;
+          grabbedItem.currentSize = grabbedItem.size * grabbedItem.scaleFactor; // Update visual size
+      }
+      if (key === '-') { // '-' for scale down
+          grabbedItem.scaleFactor *= 0.9;
+          grabbedItem.currentSize = grabbedItem.size * grabbedItem.scaleFactor; // Update visual size
+      }
+       // Prevent default browser actions for +/- keys
+        return false;
+    }
      // Allow other keys to pass through
      return true;
 }
 
-// Handler for Scale Up button
-function scaleUpItem() {
-    if (grabbedItem) {
-        grabbedItem.scaleFactor *= 1.1; // Increase scale by 10%
-        grabbedItem.currentSize = grabbedItem.size * grabbedItem.scaleFactor; // Update visual size
-    }
-    // p5.js button callbacks automatically prevent default mouse behavior
-}
+// Handler for Scale Up button - REMOVED
+// function scaleUpItem() { /* ... */ }
 
-// Handler for Scale Down button
-function scaleDownItem() {
-     if (grabbedItem) {
-       grabbedItem.scaleFactor *= 0.9; // Decrease scale by 10%
-        grabbedItem.currentSize = grabbedItem.size * grabbedItem.scaleFactor; // Update visual size
-     }
-     // p5.js button callbacks automatically prevent default mouse behavior
-}
+// Handler for Scale Down button - REMOVED
+// function scaleDownItem() { /* ... */ }
 
 
 // Function tied to the new 'Add Text' button click
@@ -835,16 +813,19 @@ function snapAngle(angleRadians, incrementRadians) {
 }
 
 
-// Random button action - clears placed items and adds new random floating shapes
+// Random button action - clears FLOATING items and adds new random floating shapes
 function resetRandom() {
-    placedItems = []; // Clear placed items
+    // Keep placed items, clear only floating shapes
     shapes = []; // Clear existing floating shapes
     // Add a bunch of new floating shapes
     for (let i = 0; i < 30; i++) {
       shapes.push(new FloatingShape()); // constructor handles positioning and typing
     }
-     grabbedItem = null;
-      inputElement.value(random(TEXT_OPTIONS.slice(1))); // Reset input
+     // Deselect grabbed item if it was floating
+     if(grabbedItem && shapes.includes(grabbedItem)) {
+        grabbedItem = null;
+         inputElement.value(random(TEXT_OPTIONS.slice(1))); // Reset input
+     }
 }
 
 // Restart button action - clears everything and resets
@@ -916,7 +897,11 @@ function windowResized() {
     // CANVAS_AREA_W = 500; // Keep width fixed
     CANVAS_AREA_H = CANVAS_AREA_W * (5 / 4); // 4:5 ratio H = W * 5/4
     CANVAS_AREA_X = width / 2 - CANVAS_AREA_W / 2;
-    CANVAS_AREA_Y = HEADER_HEIGHT + 20;
+    // Calculate CANVAS_AREA_Y to center the white canvas vertically within the space below the header
+    CANVAS_AREA_Y = HEADER_HEIGHT + ((height - HEADER_HEIGHT) - CANVAS_AREA_H) / 2;
+     // Ensure it's not placed too high if canvas is small
+    CANVAS_AREA_Y = max(HEADER_HEIGHT + 10, CANVAS_AREA_Y); // Minimum 10px below header
+
 
     // Reposition UI elements (DOM) - essential for usability
     inputElement.position(20, HEADER_HEIGHT / 2 - 15);
@@ -925,20 +910,18 @@ function windowResized() {
 
      addTextButton.position(inputElement.x + inputElement.width + 10, HEADER_HEIGHT / 2 - 15);
 
-     let buttonXStart = CANVAS_AREA_X + CANVAS_AREA_W + 20;
+     // Recalculate button positions based on flow after canvas area
+     let buttonXStart = CANVAS_AREA_X + CANVAS_AREA_W + 20; // Right of the central canvas
      let buttonSpacing = 10;
-     let buttonPadY = 15; // Vertical padding for non-scale buttons
-     let scaleButtonHeight = buttonPadY * 2; // Match vertical size of other buttons roughly
+     let buttonPadY = 15; // Vertical padding
 
     randomButton.position(buttonXStart, HEADER_HEIGHT / 2 - buttonPadY);
+    // Position RESTART relative to RANDOM
     restartButton.position(randomButton.x + randomButton.width + buttonSpacing, HEADER_HEIGHT / 2 - buttonPadY);
+    // Position SAVE relative to RESTART
     saveButton.position(restartButton.x + restartButton.width + buttonSpacing, HEADER_HEIGHT / 2 - buttonPadY);
 
-     // Reposition scale buttons
-    let scaleButtonY = HEADER_HEIGHT / 2 - buttonPadY; // Use same vertical alignment
-    let scaleButtonWidth = 30; // Small button width
-    scaleUpButton.position(saveButton.x + saveButton.width + buttonSpacing, scaleButtonY);
-    scaleDownButton.position(scaleUpButton.x + scaleUpButton.width + buttonSpacing, scaleButtonY);
+     // scaleUpButton and scaleDownButton repositioning removed per user request
 
 
     // Recreate graphics buffer if canvas area size changes (essential after recalculating CANVAS_AREA_H)
