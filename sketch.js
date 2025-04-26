@@ -26,7 +26,6 @@ const PALETTE = [
   '#E70012', // Red hexagon
   '#FE4DD3', // Pink square
   '#41AD4A', // Green shape
-  '#000000',
   // Optionally include other colors like black or grey if shapes can be those
   // '#222222', // Dark Grey - used for some small shapes perhaps?
   // '#FFFFFF'  // White - less likely for floating shapes, maybe for text color?
@@ -47,7 +46,8 @@ const TEXT_OPTIONS = [
 let baseFont = 'monospace'; // Changed from Courier New as monospace is more common/likely system font
 
 // Rotation snapping increment (e.g., 15 degrees converted to radians)
-let SNAP_INCREMENT_RADIANS; // Initialized in setup()
+// >> DECLARE AS LET GLOBALLY <<
+let SNAP_INCREMENT_RADIANS; // Declared globally, Initialized in setup() using radians()
 
 // Define size categories for shapes to control distribution
 const sizeCategories = [
@@ -151,6 +151,10 @@ class FloatingShape {
     this.landFrame = -1;
     this.tempScaleEffect = 1; // Reset animation effect
     // this.tempOffsetY = 0; // Reset bounce
+
+    // >> ENSURE NO CONST DECLARATION FOR SNAP_INCREMENT_RADIANS IS HERE <<
+    // Example of the problematic line (should NOT be here):
+    // const SNAP_INCREMENT_RADIANS = radians(15); // <<< REMOVE THIS LINE IF IT EXISTS HERE!
   }
 
   // Update movement for floating shapes
@@ -334,6 +338,7 @@ class FloatingShape {
            // Use max of a base size or scaled size portion
            // Increased the base hit radius for text significantly
            hitRadius = max(60, this.size * this.scaleFactor * 0.5); // Adjust multiplier as needed
+
        } else { // It's a shape
            // For shapes, radius is size/2 * scaleFactor
            hitRadius = this.size * this.scaleFactor / 2;
@@ -376,7 +381,8 @@ function setup() {
   createCanvas(1000, 1400);
 
   // --- Initialize P5.js dependent variables here ---
-  // Now radians() is available
+  // Now radians() is available after createCanvas()
+  // >> ASSIGN TO THE GLOBAL LET VARIABLE <<
   SNAP_INCREMENT_RADIANS = radians(15);
   // ---------------------------------------------
 
@@ -517,10 +523,6 @@ function draw() {
   image(canvasPG, CANVAS_AREA_X, CANVAS_AREA_Y);
 
   // Draw vertical separation lines - REMOVED per user request
-  // stroke(255, 150, 0); // Orange
-  // strokeWeight(2);
-  // line(width/2 - CANVAS_AREA_W/2 - 10, HEADER_HEIGHT, width/2 - CANVAS_AREA_W/2 - 10, height);
-  // line(width/2 + CANVAS_AREA_W/2 + 10, HEADER_HEIGHT, width/2 + CANVAS_AREA_W/2 + 10, height);
 
 
   // Draw grabbed item on top of everything else with hover effect
@@ -569,17 +571,6 @@ function draw() {
   text("PL", plElementX, HEADER_HEIGHT / 2 + 2); // +2 offset for better centering maybe
 
   // Scale button appearance update removed as buttons are removed
-  // if (grabbedItem) {
-  //   scaleUpButton.style("background-color", color(250, 100, 0)); // Orange when active
-  //   scaleUpButton.style("color", color(255));
-  //   scaleDownButton.style("background-color", color(250, 100, 0)); // Orange when active
-  //   scaleDownButton.style("color", color(255));
-  // } else {
-  //   scaleUpButton.style("background-color", color(200)); // Grey when inactive
-  //   scaleUpButton.style("color", color(50));
-  //   scaleDownButton.style("background-color", color(200)); // Grey when inactive
-  //   scaleDownButton.style("color", color(50));
-  // }
   // --- END HEADER DRAWING ---
 }
 
@@ -888,7 +879,7 @@ function saveCanvasArea() {
 }
 
 
-
+// >> WINDOW RESIZED FUNCTION - ENSURING BUTTONS ARE DEFINED <<
 function windowResized() {
     // Keep the target canvas size, recalculate positions relative to it
     // Note: For true responsiveness, you might resize the main canvas here too
@@ -905,30 +896,35 @@ function windowResized() {
 
 
     // Reposition UI elements (DOM) - essential for usability
-    inputElement.position(20, HEADER_HEIGHT / 2 - 15);
-     // Recalculate size based on new CANVAS_AREA_X
-    inputElement.size(CANVAS_AREA_X - 40 - 85);
+    // >> Add checks here to ensure elements exist before trying to position them <<
+    // This prevents errors if windowResized is called before setup finishes creating elements
+    if (inputElement) inputElement.position(20, HEADER_HEIGHT / 2 - 15);
+    // Recalculate size based on new CANVAS_AREA_X
+    if (inputElement) inputElement.size(CANVAS_AREA_X - 40 - 85);
 
-     addTextButton.position(inputElement.x + inputElement.width + 10, HEADER_HEIGHT / 2 - 15);
+    if (addTextButton) addTextButton.position(inputElement.x + inputElement.width + 10, HEADER_HEIGHT / 2 - 15); // Relies on inputElement existence
 
      // Recalculate button positions based on flow after canvas area
      let buttonXStart = CANVAS_AREA_X + CANVAS_AREA_W + 20; // Right of the central canvas
      let buttonSpacing = 10;
      let buttonPadY = 15; // Vertical padding
 
-    randomButton.position(buttonXStart, HEADER_HEIGHT / 2 - buttonPadY);
-    // Position RESTART relative to RANDOM
-    restartButton.position(randomButton.x + randomButton.width + buttonSpacing, HEADER_HEIGHT / 2 - buttonPadY);
-    // Position SAVE relative to RESTART
-    saveButton.position(restartButton.x + restartButton.width + buttonSpacing, HEADER_HEIGHT / 2 - buttonPadY);
-
-     // scaleUpButton and scaleDownButton repositioning removed per user request
+    // >> Check button existence before positioning them <<
+    if (randomButton) randomButton.position(buttonXStart, HEADER_HEIGHT / 2 - buttonPadY);
+    // Position RESTART relative to RANDOM - ensure both exist
+    if (randomButton && restartButton) restartButton.position(randomButton.x + randomButton.width + buttonSpacing, HEADER_HEIGHT / 2 - buttonPadY);
+    // Position SAVE relative to RESTART - ensure both exist
+    if (restartButton && saveButton) saveButton.position(restartButton.x + restartButton.width + buttonSpacing, HEADER_HEIGHT / 2 - buttonPadY);
 
 
     // Recreate graphics buffer if canvas area size changes (essential after recalculating CANVAS_AREA_H)
     if (canvasPG) {
       canvasPG.resizeCanvas(CANVAS_AREA_W, CANVAS_AREA_H); // Resize the buffer
     } else {
-         canvasPG = createGraphics(CANVAS_AREA_W, CANVAS_AREA_H);
+         // Should ideally only create in setup, but resizeCanvas might fail if not previously created
+         // if this is called very early before setup completes. Adding a check.
+         if(CANVAS_AREA_W > 0 && CANVAS_AREA_H > 0) { // Ensure dimensions are valid
+             canvasPG = createGraphics(CANVAS_AREA_W, CANVAS_AREA_H);
+         }
      }
 }
