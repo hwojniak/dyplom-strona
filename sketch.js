@@ -46,7 +46,7 @@ const TEXT_OPTIONS = [
 let baseFont = 'monospace'; // Changed from Courier New as monospace is more common/likely system font
 
 // Rotation snapping increment (e.g., 15 degrees converted to radians)
-// >> DECLARE AS LET GLOBALLY <<
+// >> THIS LINE MUST BE 'let', NOT 'const' <<
 let SNAP_INCREMENT_RADIANS; // Declared globally, Initialized in setup() using radians()
 
 // Define size categories for shapes to control distribution
@@ -152,9 +152,7 @@ class FloatingShape {
     this.tempScaleEffect = 1; // Reset animation effect
     // this.tempOffsetY = 0; // Reset bounce
 
-    // >> ENSURE NO CONST DECLARATION FOR SNAP_INCREMENT_RADIANS IS HERE <<
-    // Example of the problematic line (should NOT be here):
-    // const SNAP_INCREMENT_RADIANS = radians(15); // <<< REMOVE THIS LINE IF IT EXISTS HERE!
+    // >> ENSURE NO const DECLARATION FOR SNAP_INCREMENT_RADIANS IS HERE <<
   }
 
   // Update movement for floating shapes
@@ -366,24 +364,25 @@ class FloatingShape {
 // --- End FloatingShape Class ---
 
 
-function preload() {
+function preload() { // Likely starts around line 369 based on previous error
   // Attempt to load a specific font if you have a file, e.g., a pixel font
   // try {
   //   baseFont = loadFont('path/to/your/pixel_font.ttf');
   //   console.log("Custom font loaded successfully.");
   // } catch (e) {
-     console.warn("Custom font not loaded, using default:", baseFont);
+     console.warn("Custom font not loaded, using default:", baseFont); // <-- This is line 375 according to error
   // }
 }
 
-function setup() {
+function setup() { // Likely starts around line 383 based on previous error
   // Match the target resolution better
   createCanvas(1000, 1400);
 
   // --- Initialize P5.js dependent variables here ---
   // Now radians() is available after createCanvas()
   // >> ASSIGN TO THE GLOBAL LET VARIABLE <<
-  SNAP_INCREMENT_RADIANS = radians(15);
+  // >> THIS IS LINE 390 ACCORDING TO YOUR ERROR <<
+  SNAP_INCREMENT_RADIANS = radians(15); // This should now assign correctly to the global LET variable
   // ---------------------------------------------
 
   // Calculate central canvas area dimensions based on fixed width and 4:5 ratio (W:H)
@@ -879,7 +878,7 @@ function saveCanvasArea() {
 }
 
 
-// >> WINDOW RESIZED FUNCTION - ENSURING BUTTONS ARE DEFINED <<
+// WINDOW RESIZED FUNCTION
 function windowResized() {
     // Keep the target canvas size, recalculate positions relative to it
     // Note: For true responsiveness, you might resize the main canvas here too
@@ -896,20 +895,21 @@ function windowResized() {
 
 
     // Reposition UI elements (DOM) - essential for usability
-    // >> Add checks here to ensure elements exist before trying to position them <<
+    // Add checks here to ensure elements exist before trying to position them
     // This prevents errors if windowResized is called before setup finishes creating elements
     if (inputElement) inputElement.position(20, HEADER_HEIGHT / 2 - 15);
     // Recalculate size based on new CANVAS_AREA_X
     if (inputElement) inputElement.size(CANVAS_AREA_X - 40 - 85);
 
-    if (addTextButton) addTextButton.position(inputElement.x + inputElement.width + 10, HEADER_HEIGHT / 2 - 15); // Relies on inputElement existence
+    // Relies on inputElement existence, check both
+    if (inputElement && addTextButton) addTextButton.position(inputElement.x + inputElement.width + 10, HEADER_HEIGHT / 2 - 15);
 
      // Recalculate button positions based on flow after canvas area
      let buttonXStart = CANVAS_AREA_X + CANVAS_AREA_W + 20; // Right of the central canvas
      let buttonSpacing = 10;
      let buttonPadY = 15; // Vertical padding
 
-    // >> Check button existence before positioning them <<
+    // Check button existence before positioning them
     if (randomButton) randomButton.position(buttonXStart, HEADER_HEIGHT / 2 - buttonPadY);
     // Position RESTART relative to RANDOM - ensure both exist
     if (randomButton && restartButton) restartButton.position(randomButton.x + randomButton.width + buttonSpacing, HEADER_HEIGHT / 2 - buttonPadY);
