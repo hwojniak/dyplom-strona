@@ -26,6 +26,7 @@ const PALETTE = [
   '#E70012', // Red hexagon
   '#FE4DD3', // Pink square
   '#41AD4A', // Green shape
+  '#000000',
   // Optionally include other colors like black or grey if shapes can be those
   // '#222222', // Dark Grey - used for some small shapes perhaps?
   // '#FFFFFF'  // White - less likely for floating shapes, maybe for text color?
