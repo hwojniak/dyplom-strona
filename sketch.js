@@ -441,17 +441,17 @@ function draw() {
   // This ensures header visuals are on top of everything drawn on the main canvas
 
   // Draw header background
-  fill(220); // Light grey
+  fill(250); // Light grey
   noStroke();
   rect(0, 0, width, HEADER_HEIGHT);
-
+  /*
   // Draw To(o)L logo
   fill(50);
   textSize(24);
   textAlign(LEFT, CENTER);
   textFont(baseFont);
   text("To(o)L", 20, HEADER_HEIGHT / 2);
-
+  
   // Draw PL label and circle indicators in header area (match image)
   // These are positioned based on the last button in the button group (SAVE)
   let plElementX = 0; // Initialize to 0, update only if saveButton exists
@@ -460,7 +460,7 @@ function draw() {
   } else {
        // Fallback positioning if saveButton somehow didn't exist (e.g., during early setup)
        plElementX = CANVAS_AREA_X + CANVAS_AREA_W + 20 + 3 * (80 + 10) + 25; // Approximate space
-  }
+  }*/
 
 
   let circleDiameter = 20;
