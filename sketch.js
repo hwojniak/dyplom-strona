@@ -1,4 +1,4 @@
-// Enhanced interactive canvas project using p5.js
+// Interactive canvas website-tool project using p5.js
 
 let shapes = []; // Shapes currently floating or grabbed
 let placedItems = []; // Items placed and solidified on the central canvas
@@ -20,15 +20,15 @@ let CANVAS_AREA_X; // Calculated in setup based on window width
 let CANVAS_AREA_Y; // Calculated in setup (fixed distance below header)
 
 // Appearance constants matching the reference image
-const PALETTE = [
+const PALETTE = [ // Optionally include other colors like black or grey if shapes can be those
   '#0000FE', // Blue triangle
   '#FFDD00', // Yellow pentagon
   '#E70012', // Red hexagon
   '#FE4DD3', // Pink square
   '#41AD4A', // Green shape
-  // Optionally include other colors like black or grey if shapes can be those
-  // '#222222', // Dark Grey - used for some small shapes perhaps?
-  // '#FFFFFF'  // White - less likely for floating shapes, maybe for text color?
+  '#000000', // Black
+  '#222222', // Dark Grey - used for some small shapes perhaps?
+  '#FFFFFF',  // White - less likely for floating shapes, maybe for text color?
 ];
 
 const TEXT_OPTIONS = [
