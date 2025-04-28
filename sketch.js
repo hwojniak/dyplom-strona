@@ -6,26 +6,26 @@ let grabbedItem = null; // The shape currently being dragged
 
 // UI Element References (DOM elements need global vars if you create them this way)
 let inputElement;
-let saveButton;
-let randomButton;
-let restartButton;
+let saveButton; // Will become 'SAVE'
+let randomButton; // Will become 'REFRESH'
+let restartButton; // Will become 'CLEAR'
 let addTextButton;
-// scaleUpButton and scaleDownButton are removed per user request
 
 // Layout constants matching the reference image
 const HEADER_HEIGHT = 80;
 const CANVAS_AREA_W = 500; // Fixed width of the artboard
 let CANVAS_AREA_H; // Calculated in setup based on ratio (fixed height of artboard)
 let CANVAS_AREA_X; // Calculated in setup based on window width
-let CANVAS_AREA_Y; // Calculated in setup (fixed distance below header)
+let CANVAS_AREA_Y; // Calculated in setup (calculated to be centered below header)
 
 // Appearance constants matching the reference image
-const PALETTE = [ // Optionally include other colors like black or grey if shapes can be those
+const PALETTE = [
   '#0000FE', // Blue triangle
   '#FFDD00', // Yellow pentagon
   '#E70012', // Red hexagon
   '#FE4DD3', // Pink square
   '#41AD4A', // Green shape
+  '#FFA500', // Orange << ADDED ORANGE
   '#000000', // Black
   '#222222', // Dark Grey - used for some small shapes perhaps?
   '#FFFFFF',  // White - less likely for floating shapes, maybe for text color?
@@ -57,7 +57,7 @@ const sizeCategories = [
 ];
 
 
-// --- FloatingShape Class --- (Kept the same)
+// --- FloatingShape Class --- (Kept the same functionality)
 class FloatingShape {
   constructor() {
     this.reset();
@@ -113,7 +113,8 @@ class FloatingShape {
     let pickedColor;
     do {
         pickedColor = color(random(PALETTE));
-    } while (brightness(pickedColor) < 50);
+    } while (brightness(pickedColor) < 50 && red(pickedColor) < 30 && green(pickedColor) < 30 && blue(pickedColor) < 30); // Also avoid very dark on black
+
     this.color = pickedColor;
 
     this.type = random() < 0.8 ? 'shape' : 'text';
@@ -244,18 +245,24 @@ class FloatingShape {
   }
 
   isMouseOver(mx, my) {
+      // >> HIT AREA REFINEMENT - Using a larger, simpler hit circle for now <<
+      // This addresses item #5 temporarily with an easier-to-implement circle approach.
+      // A true bounding box check requires more complex geometry logic.
       let hitRadius;
        if (this.type === 'text') {
-           hitRadius = max(60, this.size * this.scaleFactor * 0.5);
+           // Use max of base size or scaled size portion for text, maybe larger than shapes
+           hitRadius = max(70, this.size * this.scaleFactor * 0.6); // Increased min and multiplier
        } else {
-           hitRadius = this.size * this.scaleFactor / 2;
-            hitRadius = max(40, hitRadius);
+           // Use a scaled fraction of size for shapes, larger minimum
+           hitRadius = this.size * this.scaleFactor * 0.7; // Using 0.7 to make shapes easier to grab too
+            hitRadius = max(50, hitRadius); // Increased minimum hit area
        }
+
        if (isNaN(this.x) || isNaN(this.y) || isNaN(mx) || isNaN(my)) {
             console.error("NaN found in isMouseOver for shape:", this, " Mouse:", mx, my);
             return false;
        }
-      return dist(mx, my, this.x, this.y) < hitRadius;
+      return dist(mx, my, this.x, this.y) < hitRadius; // Circle distance check
   }
 
   solidify() {
@@ -283,28 +290,30 @@ function setup() {
 
   // --- Initialize P5.js dependent variables here ---
   // radians() is available after createCanvas()
-  // ASSIGN TO THE GLOBAL LET VARIABLE
-  SNAP_INCREMENT_RADIANS = radians(15);
+  SNAP_INCREMENT_RADIANS = radians(15); // Global let variable assignment
   // ---------------------------------------------
 
   // Calculate central canvas area dimensions
   // CANVAS_AREA_W is a const, do not re-assign it here.
-  CANVAS_AREA_H = CANVAS_AREA_W * (5 / 4); // Height = Width * 5/4 (Uses the global const CANVAS_AREA_W)
+  CANVAS_AREA_H = CANVAS_AREA_W * (5 / 4); // Height is fixed based on width and ratio
   CANVAS_AREA_X = width / 2 - CANVAS_AREA_W / 2; // Horizontally centered based on window width (responsive)
-  // Set CANVAS_AREA_Y to a fixed distance below the header (not vertically centered within total height)
-  CANVAS_AREA_Y = HEADER_HEIGHT + 20; // 20px margin below header
-  // Add a check to prevent negative Y if header is huge (not an issue here)
-  // CANVAS_AREA_Y = max(HEADER_HEIGHT + 10, CANVAS_AREA_Y); // Keep this just in case, but 20 is fixed margin
+  // Calculate CANVAS_AREA_Y to be centered vertically below header
+  let availableHeightBelowHeader = height - HEADER_HEIGHT;
+  CANVAS_AREA_Y = HEADER_HEIGHT + max(10, (availableHeightBelowHeader - CANVAS_AREA_H) / 2); // Keep 10px min margin
+
 
   // Setup UI elements (DOM)
   let headerCenterY = HEADER_HEIGHT / 2; // Y position for vertical alignment in header
+  let buttonSpacing = 10; // Horizontal spacing between buttons
+  // Vertical padding for buttons (affects height)
+  let buttonStylePadY = '4px 20px'; // Reduced vertical padding (e.g., 4px top/bottom, 20px left/right)
 
   inputElement = createInput(random(TEXT_OPTIONS.slice(1))); // Start with random text
-  inputElement.position(20, headerCenterY - 15); // Centered vertically in header
+  inputElement.position(20, headerCenterY - inputElement.height/2); // Center based on input height
   // Size adjusted to make space for 'Add Text' button and align left of canvas area
   // Its width ends before CANVAS_AREA_X minus a margin (40px)
-  inputElement.size(CANVAS_AREA_X - 40 - 85); // Adjusting this size relative to the dynamic CANVAS_AREA_X
-  inputElement.style("padding", "10px");
+  inputElement.size(CANVAS_AREA_X - 40 - 85); // Adjusting size dynamically
+  inputElement.style("padding", "10px"); // Keep padding for internal text spacing
   inputElement.style("border", "none");
   inputElement.style("border-radius", "20px");
   inputElement.style("outline", "none");
@@ -312,8 +321,8 @@ function setup() {
   inputElement.style("font-size", "14px");
 
   addTextButton = createButton("Add Text"); // Button to add text from input
-  // Position relative to inputElement's final position and size
-  addTextButton.position(inputElement.x + inputElement.width + 10, headerCenterY - 15);
+  // Position relative to inputElement's calculated position
+  addTextButton.position(inputElement.x + inputElement.width + 10, headerCenterY - addTextButton.height/2); // Center based on button height
   addTextButton.style("padding", "10px 15px");
   addTextButton.style("border", "1px solid #888"); // Subtle border
   addTextButton.style("border-radius", "20px");
@@ -325,36 +334,41 @@ function setup() {
   // Button placement - align right of canvasAreaX and centered vertically in header
   // Starting X position for the group of buttons
   let buttonXStart = CANVAS_AREA_X + CANVAS_AREA_W + 20; // Right of the central canvas + 20px margin
-  let buttonSpacing = 10;
-  let buttonPadY = 15; // Vertical padding
 
-  randomButton = createButton("RANDOM");
-  randomButton.position(buttonXStart, headerCenterY - buttonPadY);
-  randomButton.style("padding", "8px 20px");
+  randomButton = createButton("REFRESH"); // >> RENAMED
+  // Position button centered vertically in header, using specified vertical padding for height calculation
+  // It's tricky to know the button DOM height *before* setting padding and position.
+  // A simple hack is to apply padding, let browser calculate height, then position based on calculated height.
+  // Or, set vertical position once based on a reasonable guess and accept slight off-centering for small buttons.
+  // Let's apply styles and use headerCenterY, the styles' padding will make buttons vertically taller.
+  randomButton.style("padding", buttonStylePadY); // Apply reduced vertical padding
   randomButton.style("border", "1px solid #888");
   randomButton.style("border-radius", "20px");
   randomButton.style("background-color", color(200));
   randomButton.style("color", color(50));
+  randomButton.position(buttonXStart, headerCenterY - randomButton.height/2); // Center based on calculated button height
   randomButton.mousePressed(resetRandom); // Clears floating, keeps placed
 
-  restartButton = createButton("RESTART");
-  // Position RESTART relative to the end of RANDOM
-  restartButton.position(randomButton.x + randomButton.width + buttonSpacing, headerCenterY - buttonPadY);
-  restartButton.style("padding", "8px 20px");
+
+  restartButton = createButton("CLEAR"); // >> RENAMED
+  restartButton.style("padding", buttonStylePadY); // Apply reduced vertical padding
   restartButton.style("border", "1px solid #888");
   restartButton.style("border-radius", "20px");
   restartButton.style("background-color", color(200));
   restartButton.style("color", color(50));
+  // Position RESTART relative to the end of RANDOM
+  restartButton.position(randomButton.x + randomButton.width + buttonSpacing, headerCenterY - restartButton.height/2); // Center based on height
   restartButton.mousePressed(restartAll); // Clears everything
 
+
   saveButton = createButton("SAVE");
-  // Position SAVE relative to the end of RESTART
-  saveButton.position(restartButton.x + restartButton.width + buttonSpacing, headerCenterY - buttonPadY);
-  saveButton.style("padding", "8px 20px");
+  saveButton.style("padding", buttonStylePadY); // Apply reduced vertical padding
   saveButton.style("border", "1px solid #888");
   saveButton.style("border-radius", "20px");
   saveButton.style("background-color", color(200));
   saveButton.style("color", color(50));
+  // Position SAVE relative to the end of RESTART
+  saveButton.position(restartButton.x + restartButton.width + buttonSpacing, headerCenterY - saveButton.height/2); // Center based on height
   saveButton.mousePressed(saveCanvasArea);
 
   // scaleUpButton and scaleDownButton creation removed per user request
@@ -362,7 +376,6 @@ function setup() {
 
   // Create initial floating shapes - always off-screen now
   for (let i = 0; i < 30; i++) {
-    // FloatingShape class is defined *before* setup, so this works
     shapes.push(new FloatingShape()); // constructor handles initial off-screen and type
   }
 
@@ -396,7 +409,6 @@ function draw() {
 
   // Draw placed items onto the central canvas graphics buffer (canvasPG)
   // No need to filter bounds here if they can only be dropped within the area
-  // (although keeping the filter is defensive coding)
    placedItems = placedItems.filter(item =>
         item.x >= CANVAS_AREA_X && item.x <= CANVAS_AREA_X + CANVAS_AREA_W &&
         item.y >= CANVAS_AREA_Y && item.y <= CANVAS_AREA_Y + CANVAS_AREA_H
@@ -441,25 +453,30 @@ function draw() {
   text("To(o)L", 20, HEADER_HEIGHT / 2);
 
   // Draw PL label and circle indicators in header area (match image)
-  fill(50); // Text color matching To(o)L
-  textSize(12);
-  textAlign(CENTER, CENTER);
-  textFont(baseFont); // Use the chosen font
+  // These are positioned based on the last button in the button group (SAVE)
+  let plElementX = 0; // Initialize to 0, update only if saveButton exists
+  if(saveButton) {
+      plElementX = saveButton.x + saveButton.width + 25; // Use larger margin (25) after buttons
+  } else {
+       // Fallback positioning if saveButton somehow didn't exist (e.g., during early setup)
+       plElementX = CANVAS_AREA_X + CANVAS_AREA_W + 20 + 3 * (80 + 10) + 25; // Approximate space
+  }
 
-  // Position PL elements relative to the last button (SAVE) - ensures dynamic positioning with button flow
-  let plElementX = saveButton.x + saveButton.width + 25; // Align with button spacing
+
   let circleDiameter = 20;
   let circleSpacing = 10;
+  let headerCenterY = HEADER_HEIGHT / 2;
 
+  // Draw circles
   noStroke();
   fill(180); // A bit darker grey than header
-  // Use headerCenterY for vertical alignment
-  ellipse(plElementX, HEADER_HEIGHT / 2, circleDiameter);
-  ellipse(plElementX + circleDiameter + circleSpacing, HEADER_HEIGHT / 2, circleDiameter);
+  ellipse(plElementX, headerCenterY, circleDiameter);
+  ellipse(plElementX + circleDiameter + circleSpacing, headerCenterY, circleDiameter);
 
+  // Draw PL text
   fill(50); // Text color
-  // Use headerCenterY with a small vertical offset for better centering
-  text("PL", plElementX, HEADER_HEIGHT / 2 + 2);
+  text("PL", plElementX, headerCenterY + 2); // +2 offset for better centering maybe
+
 
   // --- END HEADER DRAWING ---
 }
@@ -543,8 +560,6 @@ function mouseReleased() {
 
       // Update grabbedItem's position to be relative to canvasPG origin before pushing to placedItems
       // This ensures its stored (x,y) coordinates in placedItems are correct for drawing onto canvasPG later.
-      // When drawing on canvasPG, the graphics context is translated to CANVAS_AREA_X, CANVAS_AREA_Y.
-      // So an item at placedPos (dx, dy) relative to canvasPG needs to have its object.x/y set to (dx + CANVAS_AREA_X, dy + CANVAS_AREA_Y)
       // When releasing, mouseX/Y ARE the correct global coordinates. So we don't need to adjust grabbedItem.x/y here.
       // Its current mouseX/Y coordinates are what we want its solidified global position to be.
       // When displaying on canvasPG, we translate by grabbedItem.x - CANVAS_AREA_X and grabbedItem.y - CANVAS_AREA_Y, which calculates the correct relative position.
@@ -604,30 +619,30 @@ function keyPressed() {
 
     // Scale grabbed item using +/- keys
     if (grabbedItem) {
-      // Use UP/DOWN arrow keys for scaling instead of +/-? Maybe less likely to clash?
-      // User requested +/-. Let's stick to that but be aware it can affect browser zoom on some setups.
-      // Keycodes for +/= is 187, for - is 189
-      // Or check key property? Key = "+" or Key = "-". key === '+' || key === '=' is safer
-      if (key === '+' || key === '=') { // Check '+' key or '=' keycode
+      // Key codes: =/+ is 187, - is 189
+      // Using key property '+' or '-' is more reliable across keyboards/layouts
+      if (key === '+' || key === '=') { // Check for both + and =
           grabbedItem.scaleFactor *= 1.1;
           // Add limit to prevent becoming ridiculously large?
           grabbedItem.scaleFactor = min(grabbedItem.scaleFactor, 10.0); // Cap at 10x original size
           grabbedItem.currentSize = grabbedItem.size * grabbedItem.scaleFactor; // Update visual size
-           // Optionally reposition slightly to stay centered?
-            // grabbedItem.x += (mouseX - pmouseX) * (1 - 1.1/0.9); // Rough center adjustment? Needs testing.
-             // Let's rely on lerp in draw to smooth it out towards mouseX/Y
       }
-      if (key === '-') { // Check '-' key or keycode
+      if (key === '-') { // Check for -
           grabbedItem.scaleFactor *= 0.9;
           // Add limit to prevent becoming invisible?
            grabbedItem.scaleFactor = max(grabbedItem.scaleFactor, 0.1); // Minimum 1/10th original size
           grabbedItem.currentSize = grabbedItem.size * grabbedItem.scaleFactor; // Update visual size
       }
        // Prevent default browser actions for +/- keys
-        return false; // This is important for +/- keys to not zoom the page
+        // Check if the specific key pressed was actually +/- or = before returning false universally
+       if (key === '+' || key === '=' || key === '-') {
+             return false; // Consume the event ONLY if it was a scaling key
+       }
+       // Allow other key presses (like Delete/Backspace, which return false above already, but good practice)
+       return true; // Let browser handle other keys like letters, space etc.
     }
-     // Allow other keys to pass through
-     return true; // Return true for other key presses
+     // If no item is grabbed, allow all key presses to pass through
+     return true;
 }
 
 
@@ -681,7 +696,7 @@ function addNewTextShapeFromInput() {
     let pickedColor;
     do {
         pickedColor = color(random(PALETTE));
-    } while (brightness(pickedColor) < 50); // Re-pick if very dark
+    } while (brightness(pickedColor) < 50 && red(pickedColor) < 30 && green(pickedColor) < 30 && blue(pickedColor) < 30); // Re-pick if very dark
      newTextShape.color = pickedColor;
 
 
@@ -701,17 +716,22 @@ function isMouseOverCanvasArea() {
 
 // Helper function to snap an angle (in radians) to the nearest multiple of a given increment (in radians).
 function snapAngle(angleRadians, incrementRadians) {
-    // Round the angle to the nearest multiple of the increment
-    let snapped = round(angleRadians / incrementRadians) * incrementRadians;
-    // Optional: Normalize to be within 0 to TWO_PI, might prevent weird large numbers
-    // snapped = (snapped % TWO_PI + TWO_PI) % TWO_PI; // Correct way to keep between 0 and TWO_PI
+    if (incrementRadians === undefined || incrementRadians === 0) return angleRadians; // Avoid division by zero
+    // Normalize angle to be within 0 and TWO_PI for cleaner snapping arithmetic
+    let normalizedAngle = (angleRadians % TWO_PI + TWO_PI) % TWO_PI;
+    // Calculate the number of increments and round to the nearest whole number
+    let numIncrements = round(normalizedAngle / incrementRadians);
+    // Calculate the snapped angle
+    let snapped = numIncrements * incrementRadians;
+     // Re-normalize just in case rounding resulted in TWO_PI or negative (less likely with normalizedAngle)
+    snapped = (snapped % TWO_PI + TWO_PI) % TWO_PI;
     return snapped;
 }
 
 
-// Random button action - clears FLOATING items and adds new random floating shapes
-function resetRandom() {
-    console.log("RANDOM button pressed"); // Debug log
+// REFRESH button action - clears FLOATING items and adds new random floating shapes
+function resetRandom() { // >> RENAMED function
+    console.log("REFRESH button pressed"); // Debug log
     // Keep placed items, clear only floating shapes
     shapes = []; // Clear existing floating shapes
     // Add a bunch of new floating shapes
@@ -721,16 +741,19 @@ function resetRandom() {
      // Deselect grabbed item if it was floating
      // Check if grabbedItem exists AND if it is *currently* in the shapes array
      // Using !placedItems.includes(grabbedItem) is a safe way to check if it was originally floating
-     if(grabbedItem && shapes.includes(grabbedItem)) { // Simpler check if it's *now* in shapes
-         console.log("RANDOM: Deselecting grabbed floating item"); // Debug log
+     // Using shapes.includes(grabbedItem) check might fail if refresh clears grabbedItem just before the check
+     // Let's assume if grabbedItem isn't in placedItems, it must have been floating and gets reset/cleared.
+     // If grabbedItem is NOT in placedItems (meaning it was floating OR newly created/dragged but not placed yet)
+     if(grabbedItem && !placedItems.includes(grabbedItem)) {
+         console.log("REFRESH: Deselecting grabbed floating item"); // Debug log
         grabbedItem = null;
          inputElement.value(random(TEXT_OPTIONS.slice(1))); // Reset input
      }
 }
 
-// Restart button action - clears everything and resets
-function restartAll() {
-    console.log("RESTART button pressed"); // Debug log
+// CLEAR button action - clears everything and resets
+function restartAll() { // >> RENAMED function
+    console.log("CLEAR button pressed"); // Debug log
     placedItems = []; // Clear placed items
     shapes = []; // Clear existing floating shapes
      grabbedItem = null; // Deselect any grabbed item
@@ -748,34 +771,10 @@ function restartAll() {
 }
 
 // Save function (uses canvasPG for the clipped area)
-function saveCanvasArea() {
+function saveCanvasArea() { // Function name remains saveCanvasArea as it relates to canvas
     console.log("SAVE button pressed"); // Debug log
   if (canvasPG) {
-    // The canvasPG drawing is handled in draw(). We can just save it.
-    // For a save operation, explicitly draw the contents once to a temp buffer
-    // to ensure state (like landing) is resolved or specifically handled.
-    // Current drawing method onto canvasPG in draw handles landing, so saving canvasPG image is sufficient.
-
      save(canvasPG, 'myArtboard_' + year() + month() + day() + '_' + hour() + minute() + second() + '.png');
-
-     // If you wanted to be SUPER explicit about drawing only static state for save:
-     // let finalPG = createGraphics(CANVAS_AREA_W, CANVAS_AREA_H);
-     // finalPG.background(255); // White background
-     // for (let item of placedItems) {
-     //      finalPG.push();
-     //      let displayX = item.x - CANVAS_AREA_X;
-     //      let displayY = item.y - CANVAS_AREA_Y;
-     //      finalPG.translate(displayX, displayY);
-     //       finalPG.rotate(item.rotation);
-     //       finalPG.scale(item.scaleFactor); // Use main scale, no temp effects
-     //       finalPG.fill(item.color);
-     //       finalPG.noStroke();
-     //       item.drawShapePrimitive(finalPG, 0, 0, item.size, item.shapeType, item.type === 'text', item.textScaleAdjust);
-     //      finalPG.pop();
-     // }
-     // save(finalPG, 'myArtboard_' + year() + month() + day() + '_' + hour() + minute() + second() + '.png');
-     // finalPG.remove();
-
   } else {
     console.warn("Canvas graphics buffer not created yet!");
   }
@@ -793,60 +792,58 @@ function windowResized() {
     CANVAS_AREA_H = CANVAS_AREA_W * (5 / 4); // Height is fixed based on width and ratio
     // Horizontally center based on the new window width
     CANVAS_AREA_X = width / 2 - CANVAS_AREA_W / 2;
-    // Keep fixed distance below header
-    CANVAS_AREA_Y = HEADER_HEIGHT + 20;
+    // Calculate CANVAS_AREA_Y to be centered vertically below header
+    let availableHeightBelowHeader = height - HEADER_HEIGHT;
+    CANVAS_AREA_Y = HEADER_HEIGHT + max(10, (availableHeightBelowHeader - CANVAS_AREA_H) / 2); // Keep 10px min margin
 
 
     // Reposition UI elements (DOM) based on new dimensions
     let headerCenterY = HEADER_HEIGHT / 2;
+    // buttonStylePadY doesn't need redefining if already global/const
 
     // Add checks here to ensure elements exist before trying to position them
     // This prevents errors if windowResized is called very early before setup finishes creating elements
     if (inputElement) {
-        inputElement.position(20, headerCenterY - 15);
+        inputElement.position(20, headerCenterY - inputElement.height/2);
         // Recalculate size based on new CANVAS_AREA_X
         // Size adjusted to end before CANVAS_AREA_X minus a margin (40px)
         inputElement.size(CANVAS_AREA_X - 40 - 85);
     }
 
-
     // Relies on inputElement existence, check both
     if (inputElement && addTextButton) {
-       addTextButton.position(inputElement.x + inputElement.width + 10, headerCenterY - 15);
+       addTextButton.position(inputElement.x + inputElement.width + 10, headerCenterY - addTextButton.height/2);
     }
 
      // Recalculate button positions based on flow after canvas area
      // buttonXStart must use the *new* CANVAS_AREA_X and CANVAS_AREA_W
      let buttonXStart = CANVAS_AREA_X + CANVAS_AREA_W + 20;
-     let buttonSpacing = 10;
-     let buttonPadY = 15; // Vertical padding
-
+     let buttonSpacing = 10; // Already defined globally if preferred
+     // let buttonPadY = 15; // Not directly used for positioning here
 
     // Check button existence before positioning them
+    // Apply vertical centering based on element height after padding
     if (randomButton) {
-        randomButton.position(buttonXStart, headerCenterY - buttonPadY);
+        randomButton.position(buttonXStart, headerCenterY - randomButton.height/2);
         // Position subsequent buttons relative to the calculated position of the previous one
         if (restartButton) {
-            restartButton.position(randomButton.x + randomButton.width + buttonSpacing, headerCenterY - buttonPadY);
+            restartButton.position(randomButton.x + randomButton.width + buttonSpacing, headerCenterY - restartButton.height/2);
             if (saveButton) {
-                 saveButton.position(restartButton.x + restartButton.width + buttonSpacing, headerCenterY - buttonPadY);
+                 saveButton.position(restartButton.x + restartButton.width + buttonSpacing, headerCenterY - saveButton.height/2);
              }
         }
      }
-     // Note: PL text and circles are drawn directly using the button positions in draw,
-     // so repositioning the buttons automatically repositions the text/circles reference points.
 
 
     // Recreate or resize graphics buffer if canvas area size changes (essential after recalculating CANVAS_AREA_H or CANVAS_AREA_W)
     // It should match the fixed CANVAS_AREA_W and CANVAS_AREA_H
     if (canvasPG) {
       canvasPG.resizeCanvas(CANVAS_AREA_W, CANVAS_AREA_H); // Buffer size based on fixed artboard size
-      console.log("Resized canvasPG to:", CANVAS_AREA_W, CANVAS_AREA_H); // Debug log
     } else {
          // Create buffer if it didn't exist (should happen only in setup, but safer check)
-         if(CANVAS_AREA_W > 0 && CANVAS_AREA_H > 0) {
+         // Uses global CANVAS_AREA_W/H
+         if(CANVAS_AREA_W > 0 && CANVAS_AREA_H > 0) { // Ensure dimensions are valid
              canvasPG = createGraphics(CANVAS_AREA_W, CANVAS_AREA_H);
-             console.log("Created canvasPG:", CANVAS_AREA_W, CANVAS_AREA_H); // Debug log
          }
      }
 }
