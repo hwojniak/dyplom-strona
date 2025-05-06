@@ -80,6 +80,7 @@ function isPointInAxisAlignedRect(px, py, w, h, tolerance = 0) {
 }
 
 // Calculates the shortest distance from a point (px, py) to a line segment from (x1, y1) to (x2, y2).
+// Used for checking proximity to polygon edges in local coordinates.
 function distToSegment(px, py, x1, y1, x2, y2) {
   let l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
   if (l2 == 0) return dist(px, py, x1, y1);
@@ -154,7 +155,12 @@ function getTextBounds(content, effectiveTextSize, baseFontRef) {
 
     // Apply font properties to the temp buffer context
     tempPG.textSize(effectiveTextSize);
-    if (baseFontRef) tempPG.textFont(baseFontRef); // Check needed if baseFont is loaded p5.Font object
+    // Apply the font. Check if it's a loaded p5.Font object or just a string.
+    if (baseFontRef && typeof baseFontRef === 'object' && typeof baseFontRef.textWidth === 'function') {
+       tempPG.textFont(baseFontRef); // Use the p5.Font object
+    } else {
+       tempPG.textFont(baseFontRef); // Use the font string name
+    }
 
     // Measure text dimensions using temp buffer
     let textW = tempPG.textWidth(content);
@@ -255,7 +261,7 @@ class FloatingShape {
             maxEffectiveDimension *= this.scaleFactor; // Apply current scale
         } else { maxEffectiveDimension = (this.size || 50) * (this.scaleFactor || 1); } // Basic fallback
 
-      let effectiveRadius = maxEffectiveDimension / 2;
+      let effectiveRadius = maxEffectiveDimension / 2; // Rough furthest point from center
       let safePadding = max(width, height) * 0.4; // Increased padding
       let checkDistance = effectiveRadius + safePadding;
 
@@ -302,7 +308,7 @@ class FloatingShape {
          graphics.noFill();
          this.drawShapePrimitive(graphics, 0, 0, this.size, this.shapeType, this.type === 'text', this.textScaleAdjust);
          graphics.drawingContext.shadowBlur = 0;
-         graphics.noStroke();
+         graphics.noStroke(); // Turn off stroke for the main fill
      }
 
     graphics.fill(this.color);
@@ -311,7 +317,8 @@ class FloatingShape {
     graphics.pop();
   }
 
-  // Draws the raw geometry/text centered at (px, py), base size psize.
+  // Draws the shape's core geometry or text centered at (px, py), with base size psize.
+  // Assumes transformations are already applied.
   drawShapePrimitive(graphics, px, py, psize, pshapeType, isText = false, textScaleAdjust = 0.2) {
         if (isText) {
              // Prevent drawing empty or placeholder text
@@ -325,8 +332,8 @@ class FloatingShape {
          } else {
               graphics.rectMode(CENTER);
              switch (pshapeType) {
-               case 'circle': graphics.ellipse(px, py, psize * 2); break;
-               case 'square': graphics.rect(px, py, psize, psize); break;
+               case 'circle': graphics.ellipse(px, py, psize * 2); break; // psize is radius
+               case 'square': graphics.rect(px, py, psize, psize); break; // psize is width/height
                case 'triangle':
                  graphics.beginShape();
                  graphics.vertex(px, py - psize * 0.8); graphics.vertex(px - psize * 0.8, py + psize * 0.4); graphics.vertex(px + psize * 0.8, py + psize * 0.4);
@@ -337,7 +344,7 @@ class FloatingShape {
                case 'hexagon':
                  graphics.beginShape(); let sidesH = 6; let radiusH = psize; for (let i = 0; i < sidesH; i++) { let angle = TWO_PI / sidesH * i; let sx = cos(angle) * radiusH; let sy = sin(angle) * radiusH; graphics.vertex(px + sx, py + sy); }
                  graphics.endShape(CLOSE); break;
-               default: console.warn("Drawing unknown shape type:", pshapeType); /* graphics.rect(px, py, psize * 0.8, psize * 0.8); */ break;
+               default: console.warn("Drawing unknown shape type:", pshapeType); /* graphics.rect(px, py, psize * 0.8, psize * 0.8); */ break; // Do nothing for unknown types or remove this line to use fallback rect
              }
          }
    }
@@ -403,7 +410,7 @@ function setup() {
   CANVAS_AREA_H = CANVAS_AREA_W * (5 / 4);
   CANVAS_AREA_X = width / 2 - CANVAS_AREA_W / 2;
   CANVAS_AREA_Y = HEADER_HEIGHT + 20;
-  if(CANVAS_AREA_X < 0) CANVAS_AREA_X = 0;
+  if(CANVAS_AREA_X < 0) CANVAS_AREA_X = 0; // Ensure valid minimum position
 
   let headerCenterY = HEADER_HEIGHT / 2;
 
@@ -435,7 +442,7 @@ function setup() {
 
   // SAVE PDF Button (NEW)
    savePDFButton = createButton("SAVE PDF"); // Create the new button
-   savePDFButton.style("padding", "5px 10px").style("border", "1px solid #888").style("border-radius", "15px").style("background-color", color(200)).style("color", color(50));
+   savePDFButton.style("padding", "5px 10px").style("border", "1px solid #888").style("border-radius", "15px").style("background-color", color(200));
    savePDFButton.mousePressed(saveCanvasAreaAsPDF); // Bind to PDF save function
 
   // CLEAR Button
@@ -457,7 +464,7 @@ function setup() {
 
    // Create canvas graphics buffer
   canvasPG = createGraphics(CANVAS_AREA_W, CANVAS_AREA_H);
-   canvasPG.background(255); // Initial white background
+   canvasPG.background(255); // Initial white background for PG
 }
 
 let canvasPG; // Global reference
@@ -502,6 +509,7 @@ function draw() {
      grabbedItem.solidify();
      grabbedItem.display(this, true, 0, 0); // Draw on main canvas with grab effect
   }
+
 
   // --- DRAW HEADER / UI OVERLAY ---
   fill(220); noStroke(); rect(0, 0, width, HEADER_HEIGHT);
@@ -589,7 +597,7 @@ function keyPressed() {
       grabbedItem.currentSize = grabbedItem.size * grabbedItem.scaleFactor;
       return false;
     }
-    return true;
+    return true; // Allow other keys (like typing in input)
 }
 
 function addNewTextShapeFromInput() {
@@ -610,6 +618,8 @@ function addNewTextShapeFromInput() {
      newTextShape.x = random(CANVAS_AREA_X + CANVAS_AREA_W * 0.25, CANVAS_AREA_X + CANVAS_AREA_W * 0.75); newTextShape.y = HEADER_HEIGHT + 40;
      newTextShape.speedX = random(-0.5, 0.5); newTextShape.speedY = random(1, 2);
      newTextShape.rotation = random(-0.1, 0.1); newTextShape.rotationSpeed = random(-0.001, 0.001);
+
+     // Color handled by reset()
 
     shapes.push(newTextShape);
     inputElement.value(''); inputElement.attribute('placeholder', TEXT_OPTIONS[0]); inputElement.elt.focus();
@@ -649,7 +659,7 @@ function saveCanvasAreaAsPDF() {
      // Check if beginPDF is available (library must be loaded in HTML)
      if (typeof beginPDF !== 'function') {
          console.error("p5.js-pdf library not loaded. Cannot save as PDF.");
-         alert("Error: p5.js-pdf library not loaded. Add <script src=\"https://cdn.jsdelivr.net/gh/freshfork/p5.js-pdf/libraries/p5.func.pdf.js\"></script> to your index.html after p5.js");
+         alert("Error: p5.js-pdf library not loaded. Add <script src=\"https://cdn.jsdelivr.net/gh/freshfork/p5.js-pdf/libraries/p5.func.pdf.js\"></script> to your index.html AFTER your sketch.js script."); // Clarified error message
          return;
      }
 
@@ -756,7 +766,7 @@ function windowResized() {
              canvasPG.resizeCanvas(CANVAS_AREA_W, CANVAS_AREA_H);
          }
      } else if (!canvasPG && CANVAS_AREA_W > 0 && CANVAS_AREA_H > 0) {
-          console.log("Creating canvasPG buffer in windowResized.");
+          console.log("Creating canvasPG buffer in windowResized as it was null.");
           canvasPG = createGraphics(CANVAS_AREA_W, CANVAS_AREA_H);
            canvasPG.background(255);
      } else if (canvasPG && (CANVAS_AREA_W <= 0 || CANVAS_AREA_H <= 0)) {
