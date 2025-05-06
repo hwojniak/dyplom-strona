@@ -656,34 +656,28 @@ function saveCanvasAreaAsPNG() {
 function saveCanvasAreaAsPDF() {
     console.log("SAVE PDF button pressed");
 
-     // Check if beginPDF is available (library must be loaded in HTML)
+     // Check if beginPDF is available (KEEP THIS CHECK FOR NOW)
      if (typeof beginPDF !== 'function') {
-         console.error("p5.js-pdf library not loaded. Cannot save as PDF.");
-         alert("Error: p5.js-pdf library not loaded. Add <script src=\"https://cdn.jsdelivr.net/gh/freshfork/p5.js-pdf/libraries/p5.func.pdf.js\"></script> to your index.html AFTER your sketch.js script."); // Clarified error message
+         console.error("p5.js-pdf library not loaded. Cannot save as PDF (Check index.html script order and browser console/network tab).");
+         alert("Error: p5.js-pdf library not loaded. Add <script src=\"https://cdn.jsdelivr.net/gh/freshfork/p5.js-pdf/libraries/p5.func.pdf.js\"></script> to your index.html AFTER your sketch.js script.");
          return;
      }
 
+     console.log("beginPDF found! Attempting PDF creation..."); // Add this line
      // Begin creating the PDF document, size matches canvas area
-     beginPDF(CANVAS_AREA_W, CANVAS_AREA_H, 'myArtboard_pdf_' + generateTimestampString() + '.pdf');
+     beginPDF(CANVAS_AREA_W, CANVAS_AREA_H, 'test_blank_pdf_' + generateTimestampString() + '.pdf');
 
-    // Draw background and items onto the PDF context (which is 'this' inside this function block)
-    background(255); // Draw white background
-    noStroke(); noFill(); // Reset styles
+    // --- COMMENT OUT ALL DRAWING CODE HERE ---
+    // background(255); // Draw white background
+    // noStroke(); noFill(); // Reset styles
+    // for (let i = 0; i < placedItems.length; i++) { /* ... */ }
+    // stroke(0); strokeWeight(1); noFill(); rect(0, 0, CANVAS_AREA_W - 1, CANVAS_AREA_H - 1);
+    // --- END COMMENT OUT ---
 
-     // Draw placed items onto the PDF context
-     // Iterate forwards for correct z-order (last placed on top)
-    for (let i = 0; i < placedItems.length; i++) {
-        let item = placedItems[i];
-         // Use the display method, targeting 'this' (the PDF context), no grab effect, with canvas area offsets
-        item.display(this, false, CANVAS_AREA_X, CANVAS_AREA_Y);
-    }
-
-    // Optional border in the PDF
-    stroke(0); strokeWeight(1); noFill(); rect(0, 0, CANVAS_AREA_W - 1, CANVAS_AREA_H - 1);
 
      // Finalize and end PDF creation
-     endPDF();
-     console.log("PDF save initiated.");
+     endPDF(); // KEEP THIS LINE
+     console.log("PDF save initiated (should be blank).");
 }
 
 
