@@ -734,34 +734,6 @@ function saveCanvasAreaAsPDF() {
     // NOTE: This function will cause a flicker on the main canvas momentarily as it draws the artboard content.
     // The next call to the main draw() loop will redraw the normal scene.
 }
-/* OLD SAVE PDF function
-function saveCanvasAreaAsPDF() {
-    console.log("SAVE PDF button pressed");
-
-     // Check if beginPDF is available (KEEP THIS CHECK FOR NOW)
-     if (typeof beginPDF !== 'function') {
-         console.error("p5.js-pdf library not loaded. Cannot save as PDF (Check index.html script order and browser console/network tab).");
-         alert("Error: p5.js-pdf library not loaded. Add <script src=\"https://cdn.jsdelivr.net/gh/freshfork/p5.js-pdf/libraries/p5.func.pdf.js\"></script> to your index.html AFTER your sketch.js script.");
-         return;
-     }
-
-     console.log("beginPDF found! Attempting PDF creation..."); // Add this line
-     // Begin creating the PDF document, size matches canvas area
-     beginPDF(CANVAS_AREA_W, CANVAS_AREA_H, 'test_blank_pdf_' + generateTimestampString() + '.pdf');
-
-    // --- COMMENT OUT ALL DRAWING CODE HERE ---
-    // background(255); // Draw white background
-    // noStroke(); noFill(); // Reset styles
-    // for (let i = 0; i < placedItems.length; i++) { /* ... */ }
-    // stroke(0); strokeWeight(1); noFill(); rect(0, 0, CANVAS_AREA_W - 1, CANVAS_AREA_H - 1);
-    // --- END COMMENT OUT ---
-
-
-     // Finalize and end PDF creation
-  //   endPDF(); // KEEP THIS LINE
-  //   console.log("PDF save initiated (should be blank).");
-//}
-
 
 // REFRESH button action
 function resetRandom() {
