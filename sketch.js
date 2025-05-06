@@ -820,4 +820,4 @@ function windowResized() {
      } else if (canvasPG && (CANVAS_AREA_W <= 0 || CANVAS_AREA_H <= 0)) {
          console.warn("Invalid CANVAS_AREA dimensions after resize, canvasPG may be unusable.");
      }
-}
+} //PLEASE WORK
