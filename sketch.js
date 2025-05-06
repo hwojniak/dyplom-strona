@@ -651,89 +651,159 @@ function saveCanvasAreaAsPNG() {
         save(canvasPG, 'myArtboard_png_' + generateTimestampString() + '.png');
     } else { console.warn("Cannot save PNG: canvasPG not created."); }
 }
-// In your sketch.js, replace the ENTIRE saveCanvasAreaAsPDF function
 function saveCanvasAreaAsPDF() {
     console.log("SAVE PDF button pressed (using zenoZeng's p5.pdf)");
 
-    // Check if createPDF function exists (assuming p5.pdf is loaded and attached)
-    // Check both p5.prototype and global scope for createPDF
-    if (typeof p5.prototype.createPDF !== 'function' && typeof window.createPDF !== 'function') {
-         console.error("p5.pdf library (zenozeng version) not loaded correctly. 'createPDF' function not found. Ensure 'p5.pdf' file is in your project folder and linked AFTER p5.js and sketch.js in index.html.");
-         alert("Error: p5.pdf library (zenozeng version) not loaded correctly. Ensure 'p5.pdf' file is in your project folder and linked AFTER p5.js and sketch.js in index.html. Also clear browser cache!");
+    // 1. Check if the p5.pdf library is correctly loaded and 'createPDF' is available
+    // This check helps catch the original loading error if index.html isn't right
+    if (typeof p5 === 'undefined' || typeof p5.prototype.createPDF !== 'function') {
+         console.error("p5 or p5.pdf library (zenozeng version) not loaded correctly. 'createPDF' function not found. Check your index.html script includes and loading order: p5.js, p5.svg.js, p5.pdf.js, sketch.js. Clear browser cache!");
+         alert("Error: PDF library not loaded correctly. Check browser console for details.");
          return;
      }
 
     let pdf;
-     // Instantiate the PDF object - call it via the prototype if attached correctly,
-     // otherwise call globally if the library put it there (less likely but safer check).
-     if (typeof p5.prototype.createPDF === 'function') {
-         pdf = createPDF(); // Call the function attached to the current p5 instance
-     } else if (typeof window.createPDF === 'function') {
-         // Fallback: if attached globally but not to prototype (might need to pass 'this')
-         pdf = window.createPDF(this); // Pass the current sketch instance
-     } else {
-         console.error("Unexpected error: createPDF function not found after initial check passed?");
-         return; // Should not happen
+     try {
+         // 2. Create a p5.PDF instance. Pass 'this' (the current p5 sketch instance)
+         // createPDF is expected to be a method of the p5 instance/prototype
+         if (this.createPDF && typeof this.createPDF === 'function') {
+             pdf = this.createPDF(); // The standard way if loaded correctly onto prototype
+         } else if (window.createPDF && typeof window.createPDF === 'function') {
+              // Fallback check if it was attached globally instead (less common but possible)
+             // Pass 'this' to ensure context if required by that version's global attach
+             pdf = window.createPDF(this);
+         } else {
+             // This case should ideally not be hit if the first check passed, but defensive
+             console.error("createPDF function found, but not usable as a method or globally with context.");
+              alert("Error creating PDF instance. Check console.");
+             return;
+         }
+
+        if (!pdf) {
+            console.error("createPDF returned null or undefined.");
+             alert("Error creating PDF instance.");
+            return;
+        }
+        console.log("p5.PDF instance created. Starting record.");
+
+        // 3. Begin recording drawing commands.
+        // Drawing commands performed between beginRecord() and endRecord()
+        // on the MAIN canvas context are captured by p5.pdf.
+        pdf.beginRecord();
+
+        // --- Drawing the Artboard Content for PDF Capture ---
+        // We want the content of your central canvas area (CANVAS_AREA_X, CANVAS_AREA_Y, CANVAS_AREA_W, CANVAS_AREA_H)
+        // to become the content of the PDF page, positioned at (0,0) on the PDF.
+        // The PDF page size will be set below to match CANVAS_AREA_W/H.
+
+        // 3a. Set the background for the recorded "page" (which corresponds to the main canvas).
+        // The browser's print function usually prints the active state, including background.
+        // Drawing background(255) ensures the PDF page itself has a white background.
+        // Note: This momentarily clears the main canvas before redrawing in the main loop.
+        background(255); // Use the GLOBAL background function
+
+
+        // 3b. Temporarily adjust the coordinate system for drawing placed items.
+        // The goal is that item positions relative to the artboard's top-left (CANVAS_AREA_X, CANVAS_AREA_Y)
+        // in the main sketch should be relative to (0,0) in the PDF.
+        // By translating the main canvas context by (-CANVAS_AREA_X, -CANVAS_AREA_Y),
+        // the point (CANVAS_AREA_X, CANVAS_AREA_Y) on the original screen now becomes (0,0)
+        // in the translated coordinate system, which matches the PDF's intended origin.
+        push(); // Use the GLOBAL push function to save current drawing state stack
+        translate(-CANVAS_AREA_X, -CANVAS_AREA_Y); // Use the GLOBAL translate function
+
+
+        // 3c. Draw each placed item individually onto the currently transformed main canvas context.
+        // Manually apply each item's transformations and drawing styles using global P5 functions.
+        for (let i = 0; i < placedItems.length; i++) {
+             let item = placedItems[i];
+
+            // Apply item-specific transformations *relative to the current translated origin*
+            // The item's (x,y) coordinates are global screen coordinates. By using translate(item.x, item.y)
+            // in the coordinate system already shifted by (-CANVAS_AREA_X, -CANVAS_AREA_Y), the item is
+            // drawn at (item.x - CANVAS_AREA_X, item.y - CANVAS_AREA_Y) relative to the main origin,
+            // which is (item's position *relative to artboard top-left*) in the final PDF space.
+            push(); // Use GLOBAL push to save the state before item transform
+            translate(item.x, item.y); // Use GLOBAL translate to move to item's position
+            rotate(item.rotation); // Use GLOBAL rotate
+             // Apply scale including the landing effect scale, although for placed items tempScaleEffect should be 1 eventually
+             // Using it here ensures consistency, even if the item is currently landing (shouldn't happen often on save)
+             let currentDisplayScale = item.scaleFactor * item.tempScaleEffect;
+            scale(currentDisplayScale); // Use GLOBAL scale
+
+            // Apply item-specific drawing style
+            fill(item.color); // Use GLOBAL fill
+            noStroke(); // Use GLOBAL noStroke (or stroke/strokeWeight if items had strokes)
+
+            // Draw the core shape primitive or text.
+            // Pass 'this' (the main sketch) as the graphics context, but this function should
+            // ideally use GLOBAL drawing primitives like rect(), ellipse(), text(), etc.,
+            // which are the ones beginRecord/endRecord capture. It already is doing this
+            // with `graphics.rect`, `graphics.ellipse`, etc. Using `this` should be fine here
+            // as the commands inside `drawShapePrimitive` are simpler primitive calls, not transforms.
+             item.drawShapePrimitive(this, 0, 0, item.size, item.shapeType, item.type === 'text', item.textScaleAdjust);
+
+            pop(); // Use GLOBAL pop - restore state *after* applying item transform and drawing
+        }
+
+         // Optional: Add a border around the artboard area on the PDF page if desired
+         // This needs to be drawn after translating to the artboard's origin.
+        //  push(); // Save current transform state
+        //  translate(0,0); // Ensure we are at the origin of the 'artboard area' in the PDF context
+        //  stroke(0); // Black border
+        //  strokeWeight(1); // Border thickness
+        //  noFill(); // Border only, no fill
+        //  rect(0, 0, CANVAS_AREA_W, CANVAS_AREA_H); // Draw rectangle matching PDF page size
+        //  pop(); // Restore state
+
+
+        // Restore the coordinate system to its original state before the initial translate
+        pop(); // Use GLOBAL pop - restore state before the canvas area translate
+
+        // --- End Drawing commands for PDF context ---
+
+        console.log("Finished recording. Saving PDF.");
+        // 4. Finish capturing the drawing performed between beginRecord() and endRecord().
+        // The PDF content is generated from the state of the main canvas.
+        pdf.endRecord();
+
+        // 5. Save the captured drawing as a PDF file.
+        // Crucially, set the dimensions of the PDF page to match your artboard size.
+        // This tells the browser's print API how large the "page" should be.
+        pdf.save({
+            filename: 'myArtboard_pdf_' + generateTimestampString(), // Desired file name
+            width: CANVAS_AREA_W, // Set PDF page width to match artboard width
+            height: CANVAS_AREA_H, // Set PDF page height to match artboard height
+             // Set margins to zero so the recorded content fits precisely onto the page size specified.
+             // If margins were non-zero, the recorded content would be shrunk/shifted within the page.
+            margin: {top:0, right:0, bottom:0, left:0}
+            // Add other PDF options here if needed, like columns/rows spacing if using nextPage/nextColumn/nextRow (not used in this flow)
+        });
+
+        console.log("PDF save initiated via window.print (browser print dialog should appear).");
+
+        // Cleanup Note: The temporary drawing commands on the main canvas are transient.
+        // The next call to the main draw() loop will redraw the scene correctly,
+        // including displaying canvasPG which contains the persistent artboard content.
+
+     } catch(e) {
+         // Catch potential errors during PDF object creation, recording, or saving
+         console.error("An error occurred during PDF generation:", e);
+         alert("Error generating PDF. Check browser console for details.");
+         // Attempt to safely end recording if it was started but failed mid-process
+         if (pdf && typeof pdf.endRecord === 'function' && pdf.isRecording) {
+             console.warn("Attempting to call pdf.endRecord() after caught error.");
+             try{ pdf.endRecord(); } catch(endErr) { console.error("Error calling pdf.endRecord() during error handling:", endErr); }
+         }
      }
-
-
-    console.log("p5.PDF instance created. Starting record.");
-
-    // Begin recording drawing commands for the PDF
-    pdf.beginRecord();
-
-    // --- Drawing commands specifically for the PDF context ---
-    // Draw the content of your artboard as if it's at (0,0) in this temporary context.
-
-    // 1. Set the background for the artboard area (white)
-    // Using the global background() function should work within beginRecord().
-    // This will paint the entire "page" white, which matches your artboard background.
-    background(255);
-
-    // 2. Temporarily adjust the coordinate system
-    // The placed items' (x,y) are their positions relative to the MAIN window/sketch canvas's top-left.
-    // In the PDF, we want them positioned relative to the ARTBOARD's top-left.
-    // By translating by (-CANVAS_AREA_X, -CANVAS_AREA_Y), the point (CANVAS_AREA_X, CANVAS_AREA_Y)
-    // (the top-left corner of your visible artboard area) becomes the new (0,0) for all subsequent drawing calls.
-    push(); // Save current drawing state
-    translate(-CANVAS_AREA_X, -CANVAS_AREA_Y); // Shift origin
-
-    // 3. Draw all placed items.
-    // Now, when item.display is called, it uses item.x, item.y for its translate(), rotation, and scale.
-    // Since our origin has shifted, an item originally at screenX=CANVAS_AREA_X+artboardX, screenY=CANVAS_AREA_Y+artboardY
-    // will be drawn by its own translate(item.x, item.y) at:
-    // (item.x - CANVAS_AREA_X, item.y - CANVAS_AREA_Y) relative to the original top-left,
-    // which is (artboardX, artboardY) relative to the *new* top-left (0,0). This is correct for the PDF!
-    for (let i = 0; i < placedItems.length; i++) {
-         let item = placedItems[i];
-         // Pass 'this' as the graphics context (which beginRecord/endRecord manipulate),
-         // set grabbed=false, and pass offsetX/Y = 0 because our translate() already handled the global positioning correction.
-         item.display(this, false, 0, 0);
-    }
-
-    pop(); // Restore original drawing state (not strictly needed before endRecord, but good practice)
-
-
-    // --- End Drawing commands for PDF context ---
-
-    console.log("Finished recording. Saving PDF.");
-    // Finish capturing
-    pdf.endRecord(); // Captures the drawing performed between beginRecord and endRecord as the "lastFrame"
-
-    // Save the PDF, specifying dimensions and filename
-    pdf.save({
-        filename: 'myArtboard_pdf_' + generateTimestampString(),
-        width: CANVAS_AREA_W, // Set the PDF page width to match your artboard width
-        height: CANVAS_AREA_H, // Set the PDF page height to match your artboard height
-        margin: {top:0, right:0, bottom:0, left:0} // Remove default margins for exact fit
-        // You can add other options here like columnGap, rowGap if needed for multiple records
-    });
-
-    console.log("PDF save initiated via window.print.");
-
-    // NOTE: This function will cause a flicker on the main canvas momentarily as it draws the artboard content.
-    // The next call to the main draw() loop will redraw the normal scene.
 }
+
+// Note: The rest of your sketch.js code (setup, draw, mousePressed, mouseReleased,
+// mouseWheel, keyPressed, addNewTextShapeFromInput, isMouseOverCanvasArea,
+// snapAngle, generateTimestampString, saveCanvasAreaAsPNG, resetRandom, restartAll,
+// windowResized, and the FloatingShape class) remains the same as provided previously.
+// Ensure FloatingShape.display and drawShapePrimitive use `graphics.command()` where graphics is passed.
+// The previous fixes for isMouseOver and getTextBounds using internal PG should also be kept.
 
 // REFRESH button action
 function resetRandom() {
