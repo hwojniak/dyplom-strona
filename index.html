@@ -4,6 +4,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Your Interactive Canvas</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Bree+Serif&family=Caveat+Brush&family=Cherry+Bomb+One&family=Cinzel+Decorative&family=DynaPuff&family=Inter:wght@400&family=Permanent+Marker&family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+
+
     <style>
         /* Optional: Remove default body margin and overflow */
         body {
@@ -11,16 +18,35 @@
             padding: 0;
             overflow: hidden; /* Hide scrollbars if canvas is larger than window */
             background-color: #000; /* Match your sketch background */
+            /* Set default font family for HTML elements (like the input) */
+            font-family: 'Inter', sans-serif;
         }
-        /* You can add more CSS here for styling UI elements if you moved them out of p5 */
+        /* Style for specific p5 DOM elements like buttons if needed */
+        button, input {
+             font-family: 'Inter', sans-serif; /* Ensure these also use Inter */
+        }
+         /* Basic button style if you didn't override in sketch.js */
+         /* button {
+             font-size: 14px;
+             padding: 5px 10px;
+             border-radius: 15px;
+             border: 1px solid #888;
+             background-color: #ccc;
+             color: #333;
+         } */
     </style>
-	
+
 	<script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
+
+    <!-- If using SVG renderer (p5.pdf sometimes suggests), otherwise optional -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/addons/p5.svg.js"></script> -->
+
 
     <!-- ... sketch.js script ... -->
     <script src="sketch.js"></script>
 
     <!-- **NEW PDF library link - AFTER sketch.js** -->
+    <!-- Make sure this is the zenoZeng version. Standard p5 doesn't have createPDF -->
     <script src="p5.pdf.js"></script>
 
 </body>
