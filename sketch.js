@@ -1,4 +1,3 @@
-
 // Interactive canvas website-tool project using p5.js
 
 let shapes = []; // Shapes currently floating or grabbed
@@ -44,7 +43,6 @@ const TEXT_OPTIONS = [
   "WORK WORK WORK"
 ];
 
-// This remains 'monospace' as per original code, fonts are loaded via HTML only.
 let baseFont = 'monospace';
 
 let SNAP_INCREMENT_RADIANS;
@@ -169,7 +167,6 @@ function isPointNearPolygonEdge(px, py, vertices, tolerance) {
 }
 
 // FIX: Calculates text bounding box using a temporary graphics buffer internally.
-// Uses baseFont globally.
 function getTextBounds(content, effectiveTextSize, baseFontRef) {
     // console.log("getTextBounds called with:", content, effectiveTextSize, baseFontRef); // Debugging line
 
@@ -179,7 +176,7 @@ function getTextBounds(content, effectiveTextSize, baseFontRef) {
 
         // Apply font properties to the temp buffer context
         tempPG.textSize(effectiveTextSize);
-        tempPG.textFont(baseFontRef); // Use the font reference provided (which is 'monospace')
+        tempPG.textFont(baseFontRef); // Use the font reference provided
         tempPG.textAlign(CENTER, CENTER); // Set textAlign as it's used in drawShapePrimitive
 
         // Perform measurement
@@ -388,7 +385,6 @@ class FloatingShape {
   // Draws the shape's core geometry or text centered at (px, py), with base size psize.
   // Assumes transformations (translate, rotate, scale) are already applied to the 'graphics' context.
   // This function uses methods provided by the graphics context (e.g., graphics.rect, graphics.text).
-  // It uses the global baseFont for text drawing.
   drawShapePrimitive(graphics, px, py, psize, pshapeType, isText = false, textScaleAdjust = 0.2) {
         // Check if graphics context is valid before attempting to draw primitives
         if (!graphics || typeof graphics.rectMode !== 'function' || typeof graphics.text !== 'function') {
@@ -403,7 +399,7 @@ class FloatingShape {
              }
 
              // Apply text properties to the provided graphics context
-             graphics.textFont(baseFont); // Use the global baseFont ('monospace')
+             graphics.textFont(baseFont);
              graphics.textAlign(CENTER, CENTER);
              let effectiveTextSize = psize * textScaleAdjust; // Calculate effective size relative to base psize
              graphics.textSize(effectiveTextSize); // Set text size
@@ -460,7 +456,7 @@ class FloatingShape {
 
        // Convert mouse coordinates from global (sketch window) to object's local space.
        // Uses the item's current display scale (which might include the landing pulse).
-       let currentDisplayScale = this.scaleFactor * this.tempScaleEffect; // Use display scale here
+       let currentDisplayScale = this.scaleFactor * this.tempScaleEffect;
        let localMouse = transformPointToLocal(mx, my, this.x, this.y, this.rotation, currentDisplayScale); // Use display scale here
        let localMx = localMouse.x, localMy = localMouse.y;
 
@@ -511,7 +507,7 @@ class FloatingShape {
 
 
 function preload() {
-  // Custom font loading example - original code left commented
+  // Custom font loading example
   // baseFont = loadFont('path/to/your/font.otf'); // Load your font here
 }
 
@@ -525,10 +521,7 @@ function setup() {
    // Ensure CANVAS_AREA_W is reasonable if windowWidth is very small
   const adjustedCanvasW = min(CANVAS_AREA_W, windowWidth * 0.9);
 
-  // !!! START OF REQUEST 1: Change height ratio to sqrt(2) !!!
-  CANVAS_AREA_H = adjustedCanvasW * Math.sqrt(2); // Maintain 1:sqrt(2) aspect ratio (B paper format)
-  // !!! END OF REQUEST 1 !!!
-
+  CANVAS_AREA_H = adjustedCanvasW * (5 / 4); // Maintain 5:4 aspect ratio
   CANVAS_AREA_X = width / 2 - adjustedCanvasW / 2; // Center horizontally
   CANVAS_AREA_Y = HEADER_HEIGHT + 20; // Position below header
   if(CANVAS_AREA_X < 0) CANVAS_AREA_X = 0; // Ensure valid minimum position
@@ -694,7 +687,7 @@ function draw() {
   fill(50);
   textSize(20);
   textAlign(LEFT, CENTER);
-  textFont(baseFont); // Uses the global baseFont ('monospace')
+  textFont(baseFont);
   text("PLACEHOLDER\nLOGO", 20, HEADER_HEIGHT / 2);
 }
 
@@ -855,93 +848,54 @@ function keyPressed() {
 }
 
 
-// Function tied to adding text from input (now triggered by Enter key)
 function addNewTextShapeFromInput() {
     let currentText = inputElement.value();
-    // Use the placeholder text constant for comparison with trim()
     if (!currentText || currentText.trim() === "" || currentText.trim() === TEXT_OPTIONS[0].trim()) {
-         // Don't add if empty or just the placeholder text
-         console.log("Input is empty or placeholder, not adding text.");
+         console.log("Input empty/placeholder, not adding text.");
          inputElement.style("border-color", "red"); // Visual feedback
          setTimeout(() => inputElement.style("border-color", "#ccc"), 500);
-         inputElement.elt.focus(); // Keep focus on the input field
-         return; // Stop here if input is empty/placeholder
+         inputElement.value('');
+         inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+         inputElement.elt.focus();
+         return;
     }
 
-    console.log("Adding new text shape from input:", currentText.trim());
+    console.log("Adding new text shape:", currentText);
 
-    // Create a new FloatingShape object. Its constructor already sets up default properties including motion.
-    let newTextShape = new FloatingShape(); // This starts with a random off-screen pos/speed from its reset()
-
-    // --- Start: Revert to the *desired* spawning and initial speed logic ---
-    // Override the position and speed assigned in the constructor's reset()
-    let spawnEdge = floor(random(4)); // Pick a random edge (0=top, 1=right, 2=bottom, 3=left)
-    let posAlongEdge = random(0.4, 0.6); // Spawn near the middle 40%-60% of that edge
-    let initialOffset = 50; // Spawn point is 50 pixels OUTSIDE the screen from the chosen edge
-
-     switch (spawnEdge) {
-        case 0: // Top edge
-             newTextShape.x = width * posAlongEdge;
-             newTextShape.y = -initialOffset; // Spawn 50px *above* the top edge
-             break;
-        case 1: // Right edge
-             newTextShape.x = width + initialOffset; // Spawn 50px *right* of the right edge
-             newTextShape.y = height * posAlongEdge;
-             break;
-        case 2: // Bottom edge
-             newTextShape.x = width * posAlongEdge;
-             newTextShape.y = height + initialOffset; // Spawn 50px *below* the bottom edge
-             break;
-        case 3: // Left edge
-             newTextShape.x = -initialOffset; // Spawn 50px *left* of the left edge
-             newTextShape.y = height * posAlongEdge;
-             break;
-     }
-
-     // Give it a gentle push towards the center of the window slightly more predictably
-     // Lerp from a random initial direction slightly towards the vector pointing from the item to the window center (width/2, height/2).
-      newTextShape.speedX = lerp(random(-1, 1), (width/2 - newTextShape.x) / 400, 0.8); // Push towards center X
-      newTextShape.speedY = lerp(random(-1, 1), (height/2 - newTextShape.y) / 400, 0.8); // Push towards center Y
-    // --- End: Revert to desired spawning logic ---
-
-
-    // --- Keep the customizations for text type ---
+    let newTextShape = new FloatingShape();
     newTextShape.type = 'text';
-    newTextShape.content = currentText.trim(); // Use the input text content
-    newTextShape.shapeType = 'none'; // Explicitly not a shape primitive
+    newTextShape.content = currentText.trim();
+    newTextShape.shapeType = 'none';
 
-    // Assign properties based on a 'medium' size category feel - Keep this part
-    let mediumCategory = sizeCategories.find(cat => cat.name === 'medium');
-     if (mediumCategory) {
-         newTextShape.size = random(mediumCategory.sizeRange[0], mediumCategory.sizeRange[1]); // Pick base size from medium range
-         newTextShape.scaleFactor = 1.0; // Start with base scale 1.0
-         newTextShape.textScaleAdjust = mediumCategory.textScaleAdjust;
-     } else { // Fallback (use the original fallback values)
-        newTextShape.size = 150;
-        newTextShape.scaleFactor = 1.0;
-         newTextShape.textScaleAdjust = 0.2;
-     }
-     newTextShape.currentSize = newTextShape.size * newTextShape.scaleFactor; // Calculate current size
+    // Assign size from a category (e.g., medium)
+    let category = sizeCategories.find(cat => cat.name === 'medium') || { sizeRange: [100, 200], scaleRange: [1.0, 1.5], textScaleAdjust: 0.2 };
+    newTextShape.size = random(category.sizeRange[0] * 0.8, category.sizeRange[1] * 1.2); // Allow slightly outside category range
+    newTextShape.scaleFactor = 1.0; // Start with default scale
+    newTextShape.textScaleAdjust = category.textScaleAdjust;
+    newTextShape.currentSize = newTextShape.size * newTextShape.scaleFactor;
 
-    // Use a distinct color from palette, avoid very dark - Keep this color picking logic
-    let pickedColor;
-    do {
-        pickedColor = color(random(PALETTE));
-    } while (brightness(pickedColor) < 50); // Brightness < 50 check from original
+     // Ensure text color has enough contrast against a white background
+     let pickedColor;
+      do { pickedColor = color(random(PALETTE)); } while (brightness(pickedColor) > 255 * 0.6); // Keep trying if color is too bright (close to white)
      newTextShape.color = pickedColor;
 
-     // Keep the existing random rotation and rotation speed logic for the floating effect
-     newTextShape.rotation = random(TWO_PI);
-     newTextShape.rotationSpeed = random(-0.003, 0.003) * random(1, 3);
+
+     // Spawn location slightly offset from input/canvas area
+     newTextShape.x = random(CANVAS_AREA_X + CANVAS_AREA_W * 0.3, CANVAS_AREA_X + CANVAS_AREA_W * 0.7);
+     newTextShape.y = HEADER_HEIGHT + 50; // Just below header
+
+     // Gentle floating movement
+     newTextShape.speedX = random(-0.5, 0.5);
+     newTextShape.speedY = random(1, 1.5);
+     newTextShape.rotation = random(-0.05, 0.05);
+     newTextShape.rotationSpeed = random(-0.0005, 0.0005);
 
 
-    shapes.push(newTextShape); // Add to the floating shapes array
+    shapes.push(newTextShape); // Add to floating shapes
 
-    // Reset input field to placeholder and clear value AFTER adding text - Keep this part
-    inputElement.value(''); // Clear the text value
-    inputElement.attribute('placeholder', TEXT_OPTIONS[0]); // Re-set placeholder attribute
-    inputElement.elt.focus(); // Keep focus on the input field after adding
-     console.log("New text shape added to floating shapes from input.");
+    inputElement.value('');
+    inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+    inputElement.elt.focus(); // Keep focus for next input
 }
 
 // Checks if the mouse is within the boundaries of the central canvas artboard area
@@ -999,58 +953,52 @@ function saveCanvasAreaAsHighResPNG() {
 
     const TARGET_DPI = 300; // Standard print resolution
     const B2_WIDTH_MM = 500; // B2 paper dimensions in mm
-    const B2_HEIGHT_MM = 707; // Standard B2 is approx 1:sqrt(2)
-
+    const B2_HEIGHT_MM = 707;
     const MM_PER_INCH = 25.4;
 
     // Calculate target pixel dimensions based on B2 and DPI
-    // Use integer pixel values
-    const targetWidthPixels = round((B2_WIDTH_MM / MM_PER_INCH) * TARGET_DPI);
-    const targetHeightPixels = round((B2_HEIGHT_MM / MM_PER_INCH) * TARGET_DPI);
+    // Using round() for whole pixels
+    const targetWidthPixels = round((B2_WIDTH_MM / MM_PER_INCH) * TARGET_DPI); // approx 5906
+    const targetHeightPixels = round((B2_HEIGHT_MM / MM_PER_INCH) * TARGET_DPI); // approx 8351
 
-    // Use slightly adjusted precise target sizes that maintain the aspect ratio better
-    const actualTargetWidth = targetWidthPixels; // Use calculated width
-    // Calculate height based on width and sqrt(2) ratio, rounded
-    const actualTargetHeight = round(actualTargetWidth * Math.sqrt(2));
-    // Note: Using fixed 8350 before. Let's recalculate based on target width now for better fidelity if width changes
-    // targetWidthPixels = 5906. 5906 * sqrt(2) = ~8352.46. Round to 8352.
-    const recalculatedTargetHeight = round(actualTargetWidth * Math.sqrt(2));
+    // For saving purposes, let's fix the exact target size
+    const actualTargetWidth = 5906;
+    const actualTargetHeight = 8350; // Use 8350 for simpler rounding, close enough to 8351
 
 
-    // Source dimensions are your displayed artboard dimensions (CANVAS_AREA_W/H).
+    // Source dimensions are your displayed artboard dimensions (set by CANVAS_AREA_W/H in setup/resized)
     const sourceWidth = CANVAS_AREA_W;
-    const sourceHeight = CANVAS_AREA_H; // This already uses W * sqrt(2)
+    const sourceHeight = CANVAS_AREA_H;
 
-    // Calculate the overall scaling factor needed. Based on width match.
-    // Since both source and target (ideally) share the 1:sqrt(2) ratio,
-    // scaling by width scales height proportionally correct.
-    const overallScaleFactor = actualTargetWidth / sourceWidth;
+    // Calculate the overall scaling factor needed to blow up the source content
+    // Maintain source aspect ratio (1:1.25) within target (approx 1:1.413).
+    // Scale factor is based on fitting the width.
+    const scaleFactor = actualTargetWidth / sourceWidth;
 
-    // Calculate the actual height of the scaled source content on the target buffer
-    const scaledSourceHeight = sourceHeight * overallScaleFactor;
+    // Calculate the effective height of the scaled source content on the target canvas
+    const scaledSourceHeight = sourceHeight * scaleFactor;
 
-    // Calculate vertical offset needed to center the scaled content (should be minimal/zero)
-    const verticalOffset = (recalculatedTargetHeight - scaledSourceHeight) / 2;
+    // Calculate vertical offset needed to center the scaled content on the target B2 canvas
+    const verticalOffset = (actualTargetHeight - scaledSourceHeight) / 2;
 
-
-    console.log(`Source Artboard: ${sourceWidth}x${sourceHeight.toFixed(2)}`); // Log original floating point height
-    console.log(`Target B2 @ ${TARGET_DPI} DPI (recalculated): ${actualTargetWidth}x${recalculatedTargetHeight}`);
-    console.log(`Overall Scale Factor (Width-based): ${overallScaleFactor.toFixed(4)}`);
-    console.log(`Scaled Content Dimensions: ${round(sourceWidth * overallScaleFactor)}x${round(scaledSourceHeight)}`);
-     console.log(`Vertical Centering Offset (should be near 0 for sqrt(2) ratio): ${verticalOffset.toFixed(2)}`);
+    console.log(`Source Artboard: ${sourceWidth}x${sourceHeight}`);
+    console.log(`Target B2 @ ${TARGET_DPI} DPI: ${actualTargetWidth}x${actualTargetHeight}`);
+    console.log(`Scale Factor: ${scaleFactor.toFixed(4)}`);
+    console.log(`Scaled Content Dimensions: ${round(sourceWidth * scaleFactor)}x${round(scaledSourceHeight)}`);
+     console.log(`Vertical Centering Offset: ${verticalOffset.toFixed(2)}`);
 
 
     // Create a new temporary graphics buffer for high-resolution drawing
-    let highResPG = null;
+    let highResPG;
      try {
         // Check if target dimensions are valid before creating graphics
-         if (actualTargetWidth <= 0 || recalculatedTargetHeight <= 0) {
-            console.error("Invalid target high-res dimensions:", actualTargetWidth, recalculatedTargetHeight);
+         if (actualTargetWidth <= 0 || actualTargetHeight <= 0) {
+            console.error("Invalid target high-res dimensions:", actualTargetWidth, actualTargetHeight);
             alert("Error calculating high-res save size.");
             return;
          }
 
-        highResPG = createGraphics(actualTargetWidth, recalculatedTargetHeight); // Use recalculated height
+        highResPG = createGraphics(actualTargetWidth, actualTargetHeight);
         highResPG.background(255); // White background
 
         console.log("Drawing placed items onto high-res buffer...");
@@ -1068,16 +1016,17 @@ function saveCanvasAreaAsHighResPNG() {
 
              // Calculate the item's center position on the HIGH-RES canvas.
              // Item's original position relative to the *artboard top-left* (CANVAS_AREA_X, CANVAS_AREA_Y) is (item.x - CANVAS_AREA_X, item.y - CANVAS_AREA_Y).
-             // Scale this relative position by `overallScaleFactor` and add the `verticalOffset`.
-             let hrItemX = (item.x - CANVAS_AREA_X) * overallScaleFactor;
-             let hrItemY = (item.y - CANVAS_AREA_Y) * overallScaleFactor + verticalOffset; // Use verticalOffset
+             // Scale this relative position by `scaleFactor` and add the `verticalOffset` to position it on the target high-res buffer.
+             let hrItemX = (item.x - CANVAS_AREA_X) * scaleFactor;
+             let hrItemY = (item.y - CANVAS_AREA_Y) * scaleFactor + verticalOffset;
 
             highResPG.translate(hrItemX, hrItemY); // Move drawing origin to the item's center location
 
             highResPG.rotate(item.rotation); // Apply item's rotation around its center
 
-            // Apply the combined scale.
-             let combinedScale = item.scaleFactor * overallScaleFactor;
+            // Apply the combined scale. This includes the item's own scaleFactor AND the overall high-res scaleFactor.
+            // The `drawShapePrimitive` function uses the item's *base size* (`item.size`) which gets scaled by the current context scale.
+             let combinedScale = item.scaleFactor * scaleFactor;
             highResPG.scale(combinedScale); // Apply the combined scale to the context
 
 
@@ -1085,13 +1034,9 @@ function saveCanvasAreaAsHighResPNG() {
             highResPG.fill(item.color);
             highResPG.noStroke(); // Assume no stroke for main fill
 
-             // Set font for text BEFORE drawing it (using global baseFont as per original code)
-             if(item.type === 'text'){
-                 highResPG.textFont(baseFont); // Uses global baseFont ('monospace')
-             }
 
             // Draw the primitive shape or text using the item's *base size*.
-            // Arguments: graphics context, position (0,0), base size, shape type, isText, textScaleAdjust
+            // It will be drawn at (0,0) in the already translated, rotated, and scaled context.
              item.drawShapePrimitive(highResPG, 0, 0, item.size, item.shapeType, item.type === 'text', item.textScaleAdjust);
 
             highResPG.pop(); // Restore highResPG's transformation state for the next item
@@ -1104,28 +1049,27 @@ function saveCanvasAreaAsHighResPNG() {
         highResPG.push();
          highResPG.stroke(0); // Black border
          // Scale border weight relative to the overall scaling
-         let borderWeight = 1 * overallScaleFactor; // If original border was 1px
+         let borderWeight = 1 * scaleFactor; // If original border was 1px
          highResPG.strokeWeight(borderWeight);
          highResPG.noFill();
-         // Draw rectangle outline around the scaled content area.
-         let borderRectX = 0; // Scaled content starts at X=0 on highResPG
-         let borderRectY = verticalOffset; // Scaled content starts at Y=verticalOffset
-         let borderRectW = actualTargetWidth; // Scaled content width equals highResPG width
-         let borderRectH = scaledSourceHeight; // Scaled content height
-          // Need to adjust position/size slightly for stroke drawn on edge
-         let adjustedBorderX = borderRectX + borderWeight / 2;
-         let adjustedBorderY = borderRectY + borderWeight / 2;
-         let adjustedBorderW = borderRectW - borderWeight;
-         let adjustedBorderH = borderRectH - borderWeight;
+         // Draw rectangle outline. Use the dimensions and offset of the scaled content area.
+         // Top-left corner of content is at (0, verticalOffset) on the high-res canvas.
+         // Need to adjust position/size slightly to account for stroke weight if drawn on edge
+         let borderRectX = 0;
+         let borderRectY = verticalOffset;
+         let borderRectW = actualTargetWidth; // Width is full target width
+         let borderRectH = scaledSourceHeight; // Height is scaled height of content
 
-         highResPG.rect(adjustedBorderX, adjustedBorderY, adjustedBorderW, adjustedBorderH);
+         // Account for stroke being drawn centered on the edge by default in P5
+         highResPG.rect(borderRectX + borderWeight / 2, borderRectY + borderWeight / 2,
+                        borderRectW - borderWeight, borderRectH - borderWeight);
 
         highResPG.pop(); // Restore highResPG state
 
 
         console.log("Saving high-res PNG...");
          // Save the high-resolution buffer as a PNG file
-         saveCanvas(highResPG, `myArtboard_HIRES_${actualTargetWidth}x${recalculatedTargetHeight}_` + generateTimestampString() + '.png'); // Use recalculated height in filename
+        saveCanvas(highResPG, `myArtboard_HIRES_${actualTargetWidth}x${actualTargetHeight}_` + generateTimestampString() + '.png');
          console.log("High-res PNG save initiated.");
 
      } catch(e) {
@@ -1134,7 +1078,7 @@ function saveCanvasAreaAsHighResPNG() {
      } finally {
         // Always dispose of the temporary graphics buffer element to free up memory
         if (highResPG) {
-             highResPG.elt.remove(); // Correct way to remove the graphics element
+             highResPG.remove(); // Correct way to remove the graphics element
              console.log("High-res buffer disposed.");
          }
      }
@@ -1142,7 +1086,12 @@ function saveCanvasAreaAsHighResPNG() {
 
 
 // SAVE PDF function using zenoZeng's p5.pdf library (vector for simple shapes/text)
-// Uses the global baseFont for text.
+// NOTE: This produces a vector PDF based on drawing to the main canvas during record,
+// BUT due to canvas renderer (P2D), text appearance can vary and complex shapes
+// might not be true vectors depending on the library's implementation details
+// and browser print rendering. Raster elements (like images if you added them)
+// would be raster in the PDF.
+// This function works for the simple shapes and text you have defined IF p5.pdf is linked correctly.
 function saveCanvasAreaAsPDF() {
     console.log("SAVE PDF button pressed (using zenoZeng's p5.pdf)");
 
@@ -1208,19 +1157,12 @@ function saveCanvasAreaAsPDF() {
             let currentDisplayScale = item.scaleFactor * item.tempScaleEffect; // Including landing scale, though likely 1
             scale(currentDisplayScale); // Apply item's scale
 
-             // Set text font for this item BEFORE drawing if it's text (using global baseFont)
-            if (item.type === 'text') {
-                 textFont(baseFont); // Use global baseFont ('monospace')
-            }
-
-
-            // Set drawing styles for the item using global p5 commands
+            // Apply item color style
             fill(item.color);
             noStroke(); // Assume no stroke
 
-            // Draw the primitive shape or text centered at (0,0)
+            // Draw the shape primitive or text centered at (0,0)
             // This calls methods on 'this' (the main canvas), which p5.pdf records
-            // Passing font name here as well, though drawShapePrimitive uses global baseFont currently
              item.drawShapePrimitive(this, 0, 0, item.size, item.shapeType, item.type === 'text', item.textScaleAdjust);
 
             pop(); // Restore state after item transforms
@@ -1247,8 +1189,8 @@ function saveCanvasAreaAsPDF() {
         // Specify the desired PDF page dimensions (matching artboard).
         pdf.save({
             filename: 'myArtboard_pdf_' + generateTimestampString(),
-            width: CANVAS_AREA_W, // PDF page width matches displayed artboard width
-            height: CANVAS_AREA_H, // PDF page height matches displayed artboard height
+            width: CANVAS_AREA_W, // PDF page width matches display artboard width
+            height: CANVAS_AREA_H, // PDF page height matches display artboard height
             margin: {top:0, right:0, bottom:0, left:0} // No margins for exact fit
         });
 
@@ -1321,11 +1263,7 @@ function windowResized() {
      // Recalculate canvas area dimensions and position
      // Ensure CANVAS_AREA_W is reasonable relative to window width
      const adjustedCanvasW = min(CANVAS_AREA_W, windowWidth * 0.95); // Max width 95% of window or original 500
-
-     // !!! START OF REQUEST 1: Change height ratio to sqrt(2) !!!
-    CANVAS_AREA_H = adjustedCanvasW * Math.sqrt(2); // Maintain 1:sqrt(2) aspect ratio (B paper format)
-    // !!! END OF REQUEST 1 !!!
-
+    CANVAS_AREA_H = adjustedCanvasW * (5 / 4); // Maintain aspect ratio
     CANVAS_AREA_X = width / 2 - adjustedCanvasW / 2; // Center horizontally
     CANVAS_AREA_Y = HEADER_HEIGHT + 20; // Position below header
     if(CANVAS_AREA_X < 0) CANVAS_AREA_X = 0; // Clamp X
