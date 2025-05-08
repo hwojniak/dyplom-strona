@@ -1,3 +1,5 @@
+//NEW CODE with all the featues I want but with really bad efficiency
+
 // Interactive canvas website-tool project using p5.js
 
 let shapes = []; // Shapes currently floating or grabbed
@@ -166,36 +168,46 @@ function isPointNearPolygonEdge(px, py, vertices, tolerance) {
     return false;
 }
 
-// FIX: Calculates text bounding box using a temporary graphics buffer internally.
+// FIX: Calculates text bounding box using a *single, persistent* graphics buffer.
+let textMeasurePG; // Declare the global variable here
+
 function getTextBounds(content, effectiveTextSize, baseFontRef) {
     // console.log("getTextBounds called with:", content, effectiveTextSize, baseFontRef); // Debugging line
 
-    // Handle potential issues with temp graphics creation/usage
+    // Ensure the measurement buffer exists
+    if (!textMeasurePG) {
+        console.error("textMeasurePG is not initialized!");
+        // Fallback to a default safe size if buffer is missing
+        return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
+    }
+
+    // Use the persistent buffer for measurement
     try {
-         let tempPG = createGraphics(10, 10); // Give it a minimal starting size
+        // Apply font properties to the measurement buffer context
+        textMeasurePG.textSize(effectiveTextSize);
+        // Use the font reference provided, or a default if none
+        if (baseFontRef) {
+             textMeasurePG.textFont(baseFontRef);
+        } else {
+             // Fallback to a default font if baseFontRef is not provided
+             textMeasurePG.textFont('monospace'); // Or another safe default
+        }
+        textMeasurePG.textAlign(CENTER, CENTER); // Set textAlign as it's used in drawShapePrimitive
 
-        // Apply font properties to the temp buffer context
-        tempPG.textSize(effectiveTextSize);
-        tempPG.textFont(baseFontRef); // Use the font reference provided
-        tempPG.textAlign(CENTER, CENTER); // Set textAlign as it's used in drawShapePrimitive
-
-        // Perform measurement
-        let textW = tempPG.textWidth(content);
-        let textAsc = tempPG.textAscent();
-        let textDesc = tempPG.textDescent();
+        // Perform measurement using the persistent buffer
+        let textW = textMeasurePG.textWidth(content);
+        let textAsc = textMeasurePG.textAscent();
+        let textDesc = textMeasurePG.textDescent();
         let textH = textAsc + textDesc; // Total height
 
-        // Clean up the temporary buffer by removing its DOM element
-        if (tempPG && tempPG.elt) {
-            tempPG.elt.remove();
-        }
+        // No need to remove the buffer, it's persistent
 
         return { w: textW, h: textH };
 
     } catch (e) {
-        console.error("Error in getTextBounds:", e);
+        console.error("Error in getTextBounds using textMeasurePG:", e);
          // Return a default safe size in case of error
-        return { w: effectiveTextSize * content.length * 0.6, h: effectiveTextSize * 1.2 };
+        return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
     }
 }
 
@@ -217,14 +229,15 @@ class FloatingShape {
     let category = sizeCategories[categoryIndex];
     this.size = random(category.sizeRange[0], category.sizeRange[1]);
     this.scaleFactor = random(category.scaleRange[0], category.scaleRange[1]);
-    this.currentSize = this.size * this.scaleFactor; // Represents scaled 'size' value, not visual width/height
+    // this.currentSize = this.size * this.scaleFactor; // Removed, calculate on demand or use calculateMaxEffectiveDimension
 
     let minSpeed = 1.5, maxSpeed = 3.5; // Slightly reduced speed range
      // offScreenOffset: Use a size-dependent offset but with a minimum to prevent early deletion
      let baseOffScreenOffset = 200;
      // Calculate rough maximal extent considering text length etc.
      let roughMaxDimension = this.calculateMaxEffectiveDimension();
-     let offScreenOffset = max(roughMaxDimension * this.scaleFactor * 0.8, baseOffScreenOffset); // Apply scale before check
+     // Multiply by scaleFactor *after* getting the base dimension, then add buffer
+     let offScreenOffset = max(roughMaxDimension * this.scaleFactor + 50, baseOffScreenOffset);
 
 
     switch (edge) {
@@ -286,8 +299,9 @@ class FloatingShape {
 
   // Helper to estimate max dimension (radius equivalent) for off-screen check
   calculateMaxEffectiveDimension() {
-       if (this.type === 'text' && this.content) {
+       if (this.type === 'text' && this.content && this.content.trim() !== "" && this.content.trim() !== TEXT_OPTIONS[0].trim()) {
              let effectiveTextSize = this.size * this.textScaleAdjust;
+              // Use getTextBounds which now uses the persistent buffer
               let textBounds = getTextBounds(this.content, effectiveTextSize, baseFont);
              return max(textBounds.w, textBounds.h);
         } else if (this.type === 'shape') {
@@ -299,7 +313,7 @@ class FloatingShape {
                   case 'hexagon': return this.size; // radius used in drawing (vertex-to-center)
                   default: return this.size; // Fallback
              }
-        } else { return this.size || 50; } // Default basic size
+        } else { return this.size || 50; } // Default basic size for items without valid content/type
   }
 
 
@@ -309,15 +323,16 @@ class FloatingShape {
        this.y += this.speedY;
        this.rotation += this.rotationSpeed;
      }
-     this.currentSize = this.size * this.scaleFactor;
+     // this.currentSize = this.size * this.scaleFactor; // Removed, calculate on demand or use calculateMaxEffectiveDimension
   }
 
    // Checks if the object is significantly off-screen
    isReallyOffScreen() {
+        // Use the calculated max dimension * scale factor for the check
         let maxEffectiveDimension = this.calculateMaxEffectiveDimension() * this.scaleFactor;
       let effectiveRadius = maxEffectiveDimension / 2; // Treat it roughly like a circle for bounds check
-      // Increased buffer
-      let buffer = max(width, height) * 0.3;
+      // Increased buffer slightly
+      let buffer = max(width, height) * 0.35; // Increased buffer
       return this.x < -buffer - effectiveRadius || this.x > width + buffer + effectiveRadius ||
              this.y < -buffer - effectiveRadius || this.y > height + buffer + effectiveRadius;
   }
@@ -351,6 +366,12 @@ class FloatingShape {
         // console.warn("Invalid graphics context passed to display for item:", this);
         return; // Skip drawing if context is invalid
     }
+
+    // Skip drawing empty text items unless grabbed (to allow editing)
+    if (this.type === 'text' && (!this.content || this.content.trim() === "" || this.content.trim() === TEXT_OPTIONS[0].trim()) && !this.isGrabbed) {
+        return;
+    }
+
 
     graphics.push();
     // Translate to position relative to the graphics context's origin and passed offset
@@ -388,19 +409,20 @@ class FloatingShape {
   drawShapePrimitive(graphics, px, py, psize, pshapeType, isText = false, textScaleAdjust = 0.2) {
         // Check if graphics context is valid before attempting to draw primitives
         if (!graphics || typeof graphics.rectMode !== 'function' || typeof graphics.text !== 'function') {
-             console.warn("Invalid graphics context in drawShapePrimitive for item:", this);
+             // console.warn("Invalid graphics context in drawShapePrimitive for item:", this);
              return; // Skip drawing if context is invalid
          }
 
 
         if (isText) {
+             // Check content validity here too before attempting to draw text
              if (!this.content || this.content.trim() === "" || this.content.trim() === TEXT_OPTIONS[0].trim()) {
-                 return;
+                 return; // Skip drawing empty/placeholder text
              }
 
              // Apply text properties to the provided graphics context
-             graphics.textFont(baseFont);
-             graphics.textAlign(CENTER, CENTER);
+             graphics.textFont(baseFont); // Use the global baseFont
+             graphics.textAlign(CENTER, CENTER); // Set alignment
              let effectiveTextSize = psize * textScaleAdjust; // Calculate effective size relative to base psize
              graphics.textSize(effectiveTextSize); // Set text size
 
@@ -454,6 +476,12 @@ class FloatingShape {
             return false; // Cannot click on an invalid or zero-sized item
        }
 
+        // Cannot click on empty text unless it's the grabbed item being edited
+        if (this.type === 'text' && (!this.content || this.content.trim() === "" || this.content.trim() === TEXT_OPTIONS[0].trim()) && !this.isGrabbed) {
+            return false;
+        }
+
+
        // Convert mouse coordinates from global (sketch window) to object's local space.
        // Uses the item's current display scale (which might include the landing pulse).
        let currentDisplayScale = this.scaleFactor * this.tempScaleEffect;
@@ -465,6 +493,7 @@ class FloatingShape {
          localTolerance = max(localTolerance, 2);
 
        if (this.type === 'text') {
+           // Check content validity here too before getting bounds
            if (!this.content || this.content.trim() === "" || this.content.trim() === TEXT_OPTIONS[0].trim()) {
                return false; // Cannot click empty text
            }
@@ -530,6 +559,19 @@ function setup() {
     if (canvasPG) { canvasPG.remove(); } // Remove existing if any
     canvasPG = createGraphics(adjustedCanvasW, CANVAS_AREA_H);
     canvasPG.background(255); // Initial white background
+
+    // --- FIX: Create the persistent graphics buffer for text measurement ---
+     // It can be small, just needs a context to measure text.
+     if (textMeasurePG) { textMeasurePG.remove(); } // Remove existing if any
+     textMeasurePG = createGraphics(10, 10); // Small size is fine
+     // Ensure the font is set on this buffer's context immediately
+     if (baseFont) {
+         textMeasurePG.textFont(baseFont);
+     } else {
+         // Fallback if baseFont isn't loaded yet or is null
+         textMeasurePG.textFont('monospace');
+     }
+     textMeasurePG.textAlign(CENTER, CENTER); // Also set alignment if needed for measurement context
 
 
   let headerCenterY = HEADER_HEIGHT / 2;
@@ -623,13 +665,23 @@ function draw() {
   background(0);
 
   // Update and draw floating shapes
-  shapes = shapes.filter(shape => !shape.isReallyOffScreen() || shape.isGrabbed || shape.isPlacing);
+  // Filter out shapes that are really off-screen AND not grabbed AND not placing
+  shapes = shapes.filter(shape => shape.isGrabbed || shape.isPlacing || !shape.isReallyOffScreen());
+
   while (shapes.length < 20) { shapes.push(new FloatingShape()); } // Maintain min floating shapes
+
+  // Iterate through shapes to update and draw
+  // Draw floating shapes on the main canvas ('this'). No offset needed.
+  // Grabbed item will be drawn last, on top, in its own section below.
   for (let shape of shapes) {
-     if (!shape.isGrabbed && !shape.isPlacing) { shape.update(); } // Update if free-floating
-     shape.updateLanding(); // Update landing animation state
-     // Draw floating shapes on the main canvas ('this'). No offset needed.
-     shape.display(this, shape.isGrabbed && shapes.includes(shape), 0, 0);
+     // Update if free-floating (not grabbed and not placing)
+     if (!shape.isGrabbed && !shape.isPlacing) { shape.update(); }
+     // Update landing animation state (runs only if isPlacing is true and not grabbed)
+     shape.updateLanding();
+     // Draw floating shapes *unless* it's the grabbed item (which is drawn later)
+     if (shape !== grabbedItem) {
+          shape.display(this, false, 0, 0); // Draw on main canvas, no grab effect
+     }
   }
 
 
@@ -640,10 +692,12 @@ function draw() {
      canvasPG.background(255); // Draw white background on buffer
 
     // Draw placed items onto canvasPG (fixed on the artboard)
+    // Iterate FORWARDS to ensure correct drawing order (last added on top)
     for (let i = 0; i < placedItems.length; i++) {
         let item = placedItems[i];
         item.updateLanding(); // Update landing state
          // Draw item onto canvasPG, positioned relative to its top-left (0,0) by offsetting drawing commands
+         // Pass canvasPG as the graphics context, false for grab effect, and the artboard offset.
         item.display(canvasPG, false, CANVAS_AREA_X, CANVAS_AREA_Y);
     }
 
@@ -675,6 +729,7 @@ function draw() {
      if (grabbedItem.isPlacing) grabbedItem.isPlacing = false;
 
      // Draw the grabbed item on the main canvas with the grabbed visual effect
+     // Pass 'this' for main canvas context, true for grab effect, no offset needed for drawing on main canvas.
      grabbedItem.display(this, true, 0, 0);
   }
 
@@ -696,12 +751,12 @@ function mousePressed() {
   // MouseY < HEADER_HEIGHT covers the general header area including buttons and input
    if (mouseY < HEADER_HEIGHT) return;
 
-  // If something is already grabbed, clicking again might be for a different action
-  // but based on current design, a new click starts the grab process only if nothing is grabbed.
+  // If something is already grabbed, ignore subsequent mouse presses until released
    if (grabbedItem) { return; }
 
 
   // Attempt to grab items. Start with PLACED items as they should be on top visually
+  // Iterate backwards through placedItems for correct z-order selection
    for (let i = placedItems.length - 1; i >= 0; i--) {
        if (placedItems[i].isMouseOver(mouseX, mouseY)) {
            grabbedItem = placedItems[i];
@@ -710,8 +765,9 @@ function mousePressed() {
            grabbedItem.solidify(); // Stop any residual movement
 
            // Move from placedItems array to shapes array (temp while grabbed)
+           // Use splice to remove from placedItems and add to shapes
            let temp = placedItems.splice(i, 1)[0];
-           shapes.push(temp);
+           shapes.push(temp); // Add to end of shapes (drawn later than other floating items)
 
            // Populate input and focus
            if (grabbedItem.type === 'text') { inputElement.value(grabbedItem.content); inputElement.attribute('placeholder', ''); } else { inputElement.value(''); inputElement.attribute('placeholder', TEXT_OPTIONS[0]); }
@@ -721,8 +777,10 @@ function mousePressed() {
    }
 
   // If no placed item was grabbed, check for grabbing a FLOATING shape
+  // Iterate backwards through shapes for correct z-order selection (newer added are at end)
   for (let i = shapes.length - 1; i >= 0; i--) {
-    if (!shapes[i].isGrabbed) { // Should be false due to grabbedItem check, but safe
+    // Ensure the shape is not already grabbed (redundant check due to grabbedItem null check above, but harmless)
+    if (!shapes[i].isGrabbed) {
       if (shapes[i].isMouseOver(mouseX, mouseY)) {
         grabbedItem = shapes[i];
         grabbedItem.isGrabbed = true;
@@ -751,14 +809,15 @@ function mouseReleased() {
 
       if (grabbedItem.type === 'text') {
            let content = inputElement.value().trim();
+           // If input is empty or placeholder, discard the text item
            if(content === "" || content === TEXT_OPTIONS[0].trim()) {
-               // Discard empty text item if dropped on canvas with empty input
                console.log("Discarding empty text item on placement.");
-               shapes = shapes.filter(s => s !== grabbedItem); // Remove from shapes list
+               // The item is currently in the 'shapes' array. Filter it out.
+               shapes = shapes.filter(s => s !== grabbedItem);
                grabbedItem = null; // Clear grabbed item reference
                // Clear input field and reset placeholder handled below regardless
                inputElement.value(''); inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-               return; // Exit early
+               return; // Exit early, item is discarded
            } else {
               grabbedItem.content = content; // Update content from input
            }
@@ -770,26 +829,31 @@ function mouseReleased() {
       }
 
       // Move item from shapes list to placedItems list
+      // The item is currently in the 'shapes' array (moved there in mousePressed).
+      // Now filter it out of shapes and push it onto placedItems.
       shapes = shapes.filter(s => s !== grabbedItem); // Ensure it's not in shapes anymore
-      placedItems.push(grabbedItem); // Add to placed items
+      placedItems.push(grabbedItem); // Add to placed items (at the end for z-order)
 
       // Start landing animation
       grabbedItem.isPlacing = true;
       grabbedItem.landFrame = frameCount;
+
+      console.log("Item placed on canvas area.");
 
     } else { // Dropped outside canvas area -> Reverts to floating
          // If text, update content from input field regardless
          if (grabbedItem.type === 'text') {
              let content = inputElement.value().trim();
              grabbedItem.content = (content === "" || content === TEXT_OPTIONS[0].trim()) ? "" : content;
-             // If empty text is dropped outside, it becomes an empty item, eventually collected
+             // If empty text is dropped outside, discard it completely
              if (grabbedItem.content === "") {
                   console.log("Discarding empty text item dropped outside canvas.");
-                  shapes = shapes.filter(s => s !== grabbedItem); // Remove from shapes list
+                  // The item is currently in the 'shapes' array. Filter it out.
+                  shapes = shapes.filter(s => s !== grabbedItem);
                   grabbedItem = null; // Clear grabbed item reference
                    // Clear input field and reset placeholder handled below regardless
                  inputElement.value(''); inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-                 return; // Exit early
+                 return; // Exit early, item is discarded
              }
          }
 
@@ -798,15 +862,18 @@ function mouseReleased() {
           grabbedItem.speedY = random(-1.5, 1.5);
           grabbedItem.rotationSpeed = random(-0.003, 0.003);
           grabbedItem.isPlacing = false; // Cancel landing animation
-          // Item remains in shapes array
+          // Item remains in shapes array, its properties are just updated for floating
 
           console.log("Item dropped outside canvas area, returned to floating.");
     }
 
-    // Actions common to both drop locations
-    grabbedItem = null; // Clear grabbed item reference
-    inputElement.value(''); // Clear input field
-    inputElement.attribute('placeholder', TEXT_OPTIONS[0]); // Reset placeholder
+    // Actions common to both drop locations (unless item was discarded)
+    // Only clear grabbedItem and input if it wasn't discarded already
+    if (grabbedItem !== null) {
+        grabbedItem = null; // Clear grabbed item reference
+        inputElement.value(''); // Clear input field
+        inputElement.attribute('placeholder', TEXT_OPTIONS[0]); // Reset placeholder
+    }
   }
 }
 
@@ -823,7 +890,9 @@ function mouseWheel(event) {
 
 function keyPressed() {
     // Delete grabbed item with DELETE or BACKSPACE
-    if (grabbedItem && (keyCode === DELETE || keyCode === BACKSPACE)) {
+    // Check if input field is NOT focused before handling delete/backspace for grabbed item
+    // This prevents deleting the item when trying to delete text in the input field.
+    if (grabbedItem && (keyCode === DELETE || keyCode === BACKSPACE) && document.activeElement !== inputElement.elt) {
         console.log("Deleting grabbed item.");
         // Remove from both lists (should only be in one)
         shapes = shapes.filter(s => s !== grabbedItem);
@@ -831,17 +900,18 @@ function keyPressed() {
         grabbedItem = null;
         inputElement.value('');
         inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-        inputElement.elt.focus(); // Keep focus
-        return false; // Prevent default key action
+        inputElement.elt.focus(); // Keep focus on input after deleting item
+        return false; // Prevent default key action (like navigating back)
     }
 
     // Scale grabbed item with + / = or -
-    if (grabbedItem) {
+    // Check if input field is NOT focused before handling scaling keys
+     if (grabbedItem && document.activeElement !== inputElement.elt) {
       if (key === '+' || key === '=') { grabbedItem.scaleFactor *= 1.08; grabbedItem.scaleFactor = min(grabbedItem.scaleFactor, 6.0); }
       if (key === '-') { grabbedItem.scaleFactor *= 0.92; grabbedItem.scaleFactor = max(grabbedItem.scaleFactor, 0.1); }
-       // Update the calculated currentSize after scaling
-      grabbedItem.currentSize = grabbedItem.size * grabbedItem.scaleFactor;
-      return false; // Prevent default key action
+       // Update the calculated currentSize after scaling (though not strictly needed anymore with on-demand calc)
+      // grabbedItem.currentSize = grabbedItem.size * grabbedItem.scaleFactor; // Removed property
+      return false; // Prevent default key action (like zooming page)
     }
     // Allow other keys for input field typing etc.
     return true;
@@ -872,7 +942,7 @@ function addNewTextShapeFromInput() {
     newTextShape.size = random(category.sizeRange[0] * 0.8, category.sizeRange[1] * 1.2); // Allow slightly outside category range
     newTextShape.scaleFactor = 1.0; // Start with default scale
     newTextShape.textScaleAdjust = category.textScaleAdjust;
-    newTextShape.currentSize = newTextShape.size * newTextShape.scaleFactor;
+    // newTextShape.currentSize = newTextShape.size * newTextShape.scaleFactor; // Removed property
 
      // Ensure text color has enough contrast against a white background
      let pickedColor;
@@ -934,8 +1004,13 @@ function saveCanvasAreaAsPNG() {
          // After saving, immediately redraw placed items to remove the border from canvasPG
         // Clearing and redrawing all content is safest
         canvasPG.clear(); canvasPG.background(255);
-        for (let item of placedItems) {
-             // Redraw items correctly onto canvasPG using its offset
+        // Redraw placed items onto canvasPG using its offset
+        for (let i = 0; i < placedItems.length; i++) {
+            let item = placedItems[i];
+             // Ensure item is not empty text when drawing for save
+             if (item.type === 'text' && (!item.content || item.content.trim() === "" || item.content.trim() === TEXT_OPTIONS[0].trim())) {
+                 continue; // Skip drawing empty text items
+             }
             item.display(canvasPG, false, CANVAS_AREA_X, CANVAS_AREA_Y);
          }
 
@@ -967,11 +1042,19 @@ function saveCanvasAreaAsHighResPNG() {
 
 
     // Source dimensions are your displayed artboard dimensions (set by CANVAS_AREA_W/H in setup/resized)
-    const sourceWidth = CANVAS_AREA_W;
-    const sourceHeight = CANVAS_AREA_H;
+    // Use the *current* size of canvasPG as the source size, as it reflects the adjusted size from windowResized
+    const sourceWidth = canvasPG ? canvasPG.width : CANVAS_AREA_W;
+    const sourceHeight = canvasPG ? canvasPG.height : CANVAS_AREA_H;
+
+     if (sourceWidth <= 0 || sourceHeight <= 0) {
+         console.error("Source canvasPG dimensions are invalid:", sourceWidth, sourceHeight);
+         alert("Error: Invalid source canvas dimensions for high-res save.");
+         return;
+     }
+
 
     // Calculate the overall scaling factor needed to blow up the source content
-    // Maintain source aspect ratio (1:1.25) within target (approx 1:1.413).
+    // Maintain source aspect ratio (which is fixed 5:4) within target (approx 1:1.413).
     // Scale factor is based on fitting the width.
     const scaleFactor = actualTargetWidth / sourceWidth;
 
@@ -989,7 +1072,7 @@ function saveCanvasAreaAsHighResPNG() {
 
 
     // Create a new temporary graphics buffer for high-resolution drawing
-    let highResPG;
+    let highResPG = null; // Initialize to null
      try {
         // Check if target dimensions are valid before creating graphics
          if (actualTargetWidth <= 0 || actualTargetHeight <= 0) {
@@ -1017,8 +1100,13 @@ function saveCanvasAreaAsHighResPNG() {
              // Calculate the item's center position on the HIGH-RES canvas.
              // Item's original position relative to the *artboard top-left* (CANVAS_AREA_X, CANVAS_AREA_Y) is (item.x - CANVAS_AREA_X, item.y - CANVAS_AREA_Y).
              // Scale this relative position by `scaleFactor` and add the `verticalOffset` to position it on the target high-res buffer.
+             // The item's position (item.x, item.y) is relative to the *main canvas*.
+             // The artboard's top-left is at (CANVAS_AREA_X, CANVAS_AREA_Y) on the main canvas.
+             // So, item's position *relative to artboard origin* is (item.x - CANVAS_AREA_X, item.y - CANVAS_AREA_Y).
+             // Scale this relative position and apply the vertical offset for centering on the high-res buffer.
              let hrItemX = (item.x - CANVAS_AREA_X) * scaleFactor;
              let hrItemY = (item.y - CANVAS_AREA_Y) * scaleFactor + verticalOffset;
+
 
             highResPG.translate(hrItemX, hrItemY); // Move drawing origin to the item's center location
 
@@ -1105,15 +1193,17 @@ function saveCanvasAreaAsPDF() {
     let pdf;
      try {
          // Create a p5.PDF instance, passing the current sketch instance 'this'
-         if (this.createPDF && typeof this.createPDF === 'function') {
-             pdf = this.createPDF();
+         // Use the global p5 object if 'this.createPDF' isn't available
+         if (p5.prototype.createPDF && typeof p5.prototype.createPDF === 'function') {
+              pdf = p5.prototype.createPDF(this); // Correct way to call prototype method
          } else if (window.createPDF && typeof window.createPDF === 'function') {
-              pdf = window.createPDF(this); // Fallback global call
+              pdf = window.createPDF(this); // Fallback global call (less standard)
          } else {
-             console.error("createPDF function found, but not usable.");
+             console.error("createPDF function not found or not usable.");
              alert("Error creating PDF instance.");
              return;
          }
+
 
         if (!pdf) {
             console.error("createPDF returned null or undefined.");
@@ -1140,6 +1230,7 @@ function saveCanvasAreaAsPDF() {
         // Draw placed items using global drawing commands.
         // Item coords are relative to the original screen. With the translate, they draw
         // at (item.x - CANVAS_AREA_X, item.y - CANVAS_AREA_Y) which is relative to the artboard's (0,0).
+        // Iterate FORWARDS for correct z-order in PDF
         for (let i = 0; i < placedItems.length; i++) {
              let item = placedItems[i];
 
@@ -1194,7 +1285,7 @@ function saveCanvasAreaAsPDF() {
             margin: {top:0, right:0, bottom:0, left:0} // No margins for exact fit
         });
 
-        console.log("PDF save initiated via window.print.");
+        console.log("PDF save initiated.");
 
      } catch(e) {
          console.error("An error occurred during PDF generation:", e);
@@ -1211,9 +1302,11 @@ function saveCanvasAreaAsPDF() {
 function resetRandom() {
     console.log("REFRESH button pressed");
     let tempGrabbedFloatingItem = null;
+    // Check if the grabbed item is currently in the 'shapes' array (i.e., it was floating or newly added text)
     if (grabbedItem && shapes.includes(grabbedItem)) {
         tempGrabbedFloatingItem = grabbedItem;
-        shapes = shapes.filter(s => s !== grabbedItem); // Remove from shapes list temp
+        // Temporarily remove it from the shapes array so it's not cleared below
+        shapes = shapes.filter(s => s !== grabbedItem);
         console.log("Keeping grabbed item while refreshing floating shapes.");
      }
 
@@ -1225,7 +1318,7 @@ function resetRandom() {
          shapes.push(newShape);
     }
 
-    // Add the grabbed item back if held
+    // Add the grabbed item back to the shapes array if it was held when refresh was pressed
     if (tempGrabbedFloatingItem) {
         shapes.push(tempGrabbedFloatingItem);
     }
@@ -1332,6 +1425,16 @@ function windowResized() {
      } else {
          console.warn("Invalid CANVAS_AREA dimensions (" + adjustedCanvasW + "x" + CANVAS_AREA_H + ") after resize. Cannot create or resize canvasPG buffer.");
          if(canvasPG) { canvasPG.remove(); canvasPG = null; } // Nuke invalid buffer
+     }
+
+     // --- Ensure textMeasurePG is initialized or re-initialized if needed ---
+     // This is less likely to need resizing, but defensive check
+     if (!textMeasurePG || textMeasurePG.width === 0 || textMeasurePG.height === 0) {
+          console.log("Recreating textMeasurePG buffer in windowResized as it was null or invalid.");
+          if (textMeasurePG) textMeasurePG.remove();
+          textMeasurePG = createGraphics(10, 10); // Small size is fine
+           if (baseFont) { textMeasurePG.textFont(baseFont); } else { textMeasurePG.textFont('monospace'); }
+           textMeasurePG.textAlign(CENTER, CENTER);
      }
 
      console.log("Finished windowResized.");
