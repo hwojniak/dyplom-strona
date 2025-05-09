@@ -1,5 +1,3 @@
-//NEW CODE with all the featues I want but with really bad efficiency
-
 // Interactive canvas website-tool project using p5.js
 
 let shapes = []; // Shapes currently floating or grabbed
@@ -10,14 +8,15 @@ let grabbedItem = null; // The shape currently being dragged
 let inputElement;
 let savePNGButton;         // Existing button for standard PNG save
 let saveHighResPNGButton;  // NEW button for high-resolution PNG save
-let savePDFButton;
+// Removed: let savePDFButton; // PDF save removed as requested
 let refreshButton;
 let clearButton;
+let helpButton; // NEW: Help button
 
 // Layout constants
 const HEADER_HEIGHT = 80;
 const CANVAS_AREA_W = 500; // Fixed width of the artboard (Source for high-res scaling)
-let CANVAS_AREA_H; // Calculated in setup based on ratio
+let CANVAS_AREA_H; // Calculated in setup based on ratio (1:sqrt(2))
 let CANVAS_AREA_X; // Calculated in setup based on window width
 let CANVAS_AREA_Y; // Calculated in setup
 
@@ -32,6 +31,9 @@ const PALETTE = [
   '#222222', // Dark Grey
   '#FFFFFF',  // White
   '#FFA500', // Orange
+  '#9400D3', // Dark Violet (New Color)
+  '#FF1493', // Deep Pink (New Color)
+  '#00FFFF', // Cyan (New Color)
 ];
 
 const TEXT_OPTIONS = [
@@ -58,6 +60,14 @@ const sizeCategories = [
 
 // Small tolerance for click detection near shape edges in screen pixels
 const CLICK_TOLERANCE = 5; // Pixels
+
+// Global variable for the SVG logo
+let logoSVG;
+
+// NEW: Global variables for the help pop-up DOM elements and state
+let helpPopupContainer;
+let helpPopupImage;
+let isHelpPopupOpen = false;
 
 
 // --- Utility functions for precise mouse collision and text bounds ---
@@ -98,11 +108,16 @@ function distToSegment(px, py, x1, y1, x2, y2) {
 }
 
 // Gets local vertices for unrotated polygon shapes centered at (0,0).
-function getTriangleVertices(size) { // size acts as base ref, triangle drawn differently
-    let heightBased = size * 0.8; // These proportions match your drawing code
-    let baseWidthBased = size * 0.8; // Base half-width
-    let baseY = size * 0.4; // Vertical offset of the base from center
-    return [{ x: 0, y: -heightBased }, { x: -baseWidthBased, y: baseY }, { x: baseWidthBased, y: baseY }];
+// MODIFIED: Calculates vertices for an equilateral triangle based on 'size' as side length.
+function getTriangleVertices(size) { // size acts as side length
+    // Height of equilateral triangle: size * sqrt(3) / 2
+    // Distance from center to vertex: size / sqrt(3)
+    const r = size / sqrt(3); // Radius of the circumcircle
+    return [
+        { x: 0, y: -r },              // Top vertex
+        { x: -size / 2, y: r / 2 },   // Bottom-left vertex
+        { x: size / 2, y: r / 2 }     // Bottom-right vertex
+    ];
 }
 
 function getSquareVertices(size) { // size acts as side length
@@ -168,7 +183,7 @@ function isPointNearPolygonEdge(px, py, vertices, tolerance) {
     return false;
 }
 
-// FIX: Calculates text bounding box using a *single, persistent* graphics buffer.
+// Calculates text bounding box using a *single, persistent* graphics buffer.
 let textMeasurePG; // Declare the global variable here
 
 function getTextBounds(content, effectiveTextSize, baseFontRef) {
@@ -308,7 +323,8 @@ class FloatingShape {
              switch(this.shapeType) {
                   case 'circle': return this.size; // size is radius
                   case 'square': return this.size * Math.SQRT2 / 2; // half diagonal for effective radius
-                  case 'triangle': return this.size * 0.8 * 0.8; // distance from center to apex rough estimate
+                  // MODIFIED: Use correct calculation for equilateral triangle
+                  case 'triangle': return this.size / sqrt(3); // distance from center to vertex for equilateral
                   case 'pentagon': return this.size * 0.7; // radius used in drawing
                   case 'hexagon': return this.size; // radius used in drawing (vertex-to-center)
                   default: return this.size; // Fallback
@@ -434,10 +450,12 @@ class FloatingShape {
                case 'circle': graphics.ellipse(px, py, psize * 2); break;
                case 'square': graphics.rect(px, py, psize, psize); break;
                case 'triangle':
+                 // MODIFIED: Draw equilateral triangle
+                 const r = psize / sqrt(3); // Distance from center to vertex
                  graphics.beginShape();
-                 graphics.vertex(px, py - psize * 0.8);
-                 graphics.vertex(px - psize * 0.8, py + psize * 0.4);
-                 graphics.vertex(px + psize * 0.8, py + psize * 0.4);
+                 graphics.vertex(px, py - r); // Top vertex
+                 graphics.vertex(px - psize / 2, py + r / 2); // Bottom-left vertex
+                 graphics.vertex(px + psize / 2, py + r / 2); // Bottom-right vertex
                  graphics.endShape(CLOSE);
                  break;
                case 'pentagon':
@@ -511,6 +529,7 @@ class FloatingShape {
               case 'square':
                  return isPointInAxisAlignedRect(localMx, localMy, this.size, this.size, localTolerance);
               case 'triangle':
+                  // MODIFIED: Use correct vertices for equilateral triangle
                   let triVertices = getTriangleVertices(this.size);
                   if (isPointInConvexPolygon(localMx, localMy, triVertices)) return true;
                   return isPointNearPolygonEdge(localMx, localMy, triVertices, localTolerance);
@@ -538,6 +557,18 @@ class FloatingShape {
 function preload() {
   // Custom font loading example
   // baseFont = loadFont('path/to/your/font.otf'); // Load your font here
+
+  // Load a placeholder SVG logo (replace 'assets/logo.svg' with your actual path)
+  // Handle potential loading error
+  logoSVG = loadSVG('assets/placeholder-logo.svg',
+      // Success callback (optional)
+      () => console.log("Logo SVG loaded successfully."),
+      // Error callback (optional)
+      (error) => {
+          console.warn("Failed to load Logo SVG. Using text placeholder.", error);
+          logoSVG = null; // Set to null if loading fails
+      }
+  );
 }
 
 function setup() {
@@ -550,7 +581,9 @@ function setup() {
    // Ensure CANVAS_AREA_W is reasonable if windowWidth is very small
   const adjustedCanvasW = min(CANVAS_AREA_W, windowWidth * 0.9);
 
-  CANVAS_AREA_H = adjustedCanvasW * (5 / 4); // Maintain 5:4 aspect ratio
+  // MODIFIED: Calculate height based on 1:sqrt(2) ratio
+  CANVAS_AREA_H = adjustedCanvasW * sqrt(2); // Maintain 1:sqrt(2) aspect ratio
+
   CANVAS_AREA_X = width / 2 - adjustedCanvasW / 2; // Center horizontally
   CANVAS_AREA_Y = HEADER_HEIGHT + 20; // Position below header
   if(CANVAS_AREA_X < 0) CANVAS_AREA_X = 0; // Ensure valid minimum position
@@ -573,6 +606,19 @@ function setup() {
      }
      textMeasurePG.textAlign(CENTER, CENTER); // Also set alignment if needed for measurement context
 
+    // Apply a dropshadow style to the main canvas element to simulate header shadow
+    // This needs to be done after createCanvas creates the DOM element
+    let canvasElement = document.getElementById('defaultCanvas0'); // p5.js default canvas ID
+    if (canvasElement) {
+        // Add a class or style directly
+        // The header rectangle is drawn *over* the top of the canvas, so the shadow should be on the canvas below the header.
+        // Adding it to the canvas element itself works well for this visual effect.
+        canvasElement.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)'; // Example shadow
+        // Ensure canvas is positioned so z-index works. Buttons will need higher z-index.
+        canvasElement.style.position = 'relative';
+        canvasElement.style.zIndex = '1'; // Canvas is layer 1
+    }
+
 
   let headerCenterY = HEADER_HEIGHT / 2;
 
@@ -591,6 +637,10 @@ function setup() {
                .style("font-size", "14px")
                .style("color", color(50))
                 .style("box-sizing", "border-box"); // Include padding in size calculation
+    // NEW: Set a higher z-index for the input element so it's above the canvas
+    inputElement.style("position", "relative"); // Needed for z-index
+    inputElement.style("z-index", "10"); // Higher than canvas (z-index: 1)
+
 
   // Event listener for Enter key on input using vanilla JS elt
   inputElement.elt.addEventListener('keypress', function(event) {
@@ -603,7 +653,7 @@ function setup() {
 
   // --- Button setup (positioned in windowResized) ---
   // Note: Button creation MUST happen after createCanvas, positioning in windowResized
-  // SAVE PNG Button (existing low-res)
+  // SAVE PNG Button (standard low-res)
   savePNGButton = createButton("SAVE PNG");
   savePNGButton.style("padding", "5px 10px")
                .style("border", "1px solid #888")
@@ -611,6 +661,9 @@ function setup() {
                .style("background-color", color(200))
                .style("color", color(50));
   savePNGButton.mousePressed(saveCanvasAreaAsPNG); // Binds to original PNG save
+    // NEW: Set higher z-index for button
+    savePNGButton.style("position", "relative"); savePNGButton.style("z-index", "10");
+
 
    // SAVE HIGH-RES PNG Button (NEW)
    saveHighResPNGButton = createButton("SAVE HI-RES PNG"); // New button
@@ -620,15 +673,11 @@ function setup() {
                         .style("background-color", color(200))
                          .style("color", color(50));
    saveHighResPNGButton.mousePressed(saveCanvasAreaAsHighResPNG); // Binds to NEW high-res PNG save
+    // NEW: Set higher z-index for button
+    saveHighResPNGButton.style("position", "relative"); saveHighResPNGButton.style("z-index", "10");
 
-  // SAVE PDF Button
-   savePDFButton = createButton("SAVE PDF");
-   savePDFButton.style("padding", "5px 10px")
-                .style("border", "1px solid #888")
-                .style("border-radius", "15px")
-                .style("background-color", color(200))
-                .style("color", color(50));
-   savePDFButton.mousePressed(saveCanvasAreaAsPDF);
+
+  // Removed: SAVE PDF Button
 
   // CLEAR Button
   clearButton = createButton("CLEAR");
@@ -638,6 +687,9 @@ function setup() {
                .style("background-color", color(200))
                .style("color", color(50));
    clearButton.mousePressed(restartAll);
+    // NEW: Set higher z-index for button
+    clearButton.style("position", "relative"); clearButton.style("z-index", "10");
+
 
   // REFRESH Button
   refreshButton = createButton("REFRESH");
@@ -647,6 +699,51 @@ function setup() {
                 .style("background-color", color(200))
                 .style("color", color(50));
    refreshButton.mousePressed(resetRandom);
+    // NEW: Set higher z-index for button
+    refreshButton.style("position", "relative"); refreshButton.style("z-index", "10");
+
+    // NEW: Help Button (?)
+    helpButton = createButton("?");
+     helpButton.style("padding", "5px 10px")
+                .style("border", "1px solid #888")
+                .style("border-radius", "15px")
+                .style("background-color", color(200))
+                .style("color", color(50));
+     helpButton.mousePressed(showHelpPopup); // Bind to new function
+     // NEW: Set higher z-index for button
+     helpButton.style("position", "relative"); helpButton.style("z-index", "10");
+
+
+    // NEW: Create Help Pop-up DOM elements
+    helpPopupContainer = document.createElement('div');
+    helpPopupContainer.id = 'help-popup-container';
+    helpPopupContainer.style.cssText = `
+        display: none; /* Hidden by default */
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8); /* Semi-transparent black overlay */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000; /* Ensure it's on top of everything */
+    `;
+
+    helpPopupImage = document.createElement('img');
+    helpPopupImage.id = 'help-popup-image';
+    helpPopupImage.src = 'assets/instructions.png'; // **Set the path to your instructions PNG here**
+    helpPopupImage.style.cssText = `
+        max-width: 90%; /* Don't exceed viewport width */
+        max-height: 90%; /* Don't exceed viewport height */
+        display: block;
+        border: 2px solid white; /* Optional: Add a border */
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5); /* Optional: Add shadow */
+    `;
+
+    helpPopupContainer.appendChild(helpPopupImage);
+    document.body.appendChild(helpPopupContainer); // Add the container to the body
 
 
    // Initial positioning of DOM elements after creation/styling
@@ -661,8 +758,8 @@ function setup() {
 let canvasPG; // Global reference to the graphics buffer for the central canvas area
 
 function draw() {
-  // Set background for the main sketch window
-  background(0);
+  // Set background for the main sketch window to white
+  background(255);
 
   // Update and draw floating shapes
   // Filter out shapes that are really off-screen AND not grabbed AND not placing
@@ -735,18 +832,37 @@ function draw() {
 
 
   // --- DRAW HEADER / UI OVERLAY ---
-  fill(220);
+  // Draw the header background rectangle in white
+  fill(255);
   noStroke();
   rect(0, 0, width, HEADER_HEIGHT);
 
-  fill(50);
-  textSize(20);
-  textAlign(LEFT, CENTER);
-  textFont(baseFont);
-  text("PLACEHOLDER\nLOGO", 20, HEADER_HEIGHT / 2);
+  // Draw the logo or placeholder text in the header
+  fill(50); // Dark grey for text/logo color
+  if (logoSVG && logoSVG.width > 0 && logoSVG.height > 0) {
+      // Draw the SVG if loaded successfully
+      // Position and scale the SVG as needed in the header
+      let logoHeight = HEADER_HEIGHT * 0.6; // Example: scale logo to 60% of header height
+      let logoWidth = (logoSVG.width / logoSVG.height) * logoHeight; // Maintain aspect ratio
+      let logoX = 20; // Margin from left
+      let logoY = HEADER_HEIGHT / 2 - logoHeight / 2; // Vertically center in header
+      image(logoSVG, logoX, logoY, logoWidth, logoHeight);
+  } else {
+      // Draw placeholder text if SVG failed to load or is not available
+      textSize(20);
+      textAlign(LEFT, CENTER);
+      textFont(baseFont);
+      text("PLACEHOLDER\nLOGO", 20, HEADER_HEIGHT / 2);
+  }
 }
 
 function mousePressed() {
+  // If pop-up is open, ignore all mouse presses on the canvas
+  if (isHelpPopupOpen) {
+      // Maybe add a visual cue here if needed, but just returning is fine for closing on key press
+      return;
+  }
+
   // Check if mouse is over the header or UI elements, ignore interaction
   // MouseY < HEADER_HEIGHT covers the general header area including buttons and input
    if (mouseY < HEADER_HEIGHT) return;
@@ -758,7 +874,10 @@ function mousePressed() {
   // Attempt to grab items. Start with PLACED items as they should be on top visually
   // Iterate backwards through placedItems for correct z-order selection
    for (let i = placedItems.length - 1; i >= 0; i--) {
-       if (placedItems[i].isMouseOver(mouseX, mouseY)) {
+       let item = placedItems[i];
+       // MODIFIED: Check if mouse is over the item AND within the canvas area bounds
+       // Only allow grabbing placed items if the click is inside the artboard rectangle
+       if (isMouseOverCanvasArea() && item.isMouseOver(mouseX, mouseY)) {
            grabbedItem = placedItems[i];
            grabbedItem.isGrabbed = true;
            grabbedItem.isPlacing = false; // Stop landing animation
@@ -801,6 +920,11 @@ function mousePressed() {
 }
 
 function mouseReleased() {
+  // If pop-up is open, ignore mouse release on the canvas
+  if (isHelpPopupOpen) {
+      return;
+  }
+
   if (grabbedItem) {
     grabbedItem.isGrabbed = false; // Unmark as grabbed
 
@@ -878,6 +1002,11 @@ function mouseReleased() {
 }
 
 function mouseWheel(event) {
+   // If pop-up is open, prevent scrolling
+   if (isHelpPopupOpen) {
+       return false;
+   }
+
    // Prevent page scroll when interacting over relevant sketch area
    let isOverInteractiveArea = mouseX >= 0 && mouseX <= width && mouseY >= HEADER_HEIGHT && mouseY <= height;
 
@@ -889,9 +1018,15 @@ function mouseWheel(event) {
 }
 
 function keyPressed() {
+    // NEW: If pop-up is open, close it on ANY key press and consume the event
+    if (isHelpPopupOpen) {
+        hideHelpPopup();
+        return false; // Consume the key press
+    }
+
     // Delete grabbed item with DELETE or BACKSPACE
     // Check if input field is NOT focused before handling delete/backspace for grabbed item
-    // This prevents deleting the item when trying to delete text in the input field.
+    // This prevents deleting the item when trying to delete text in focused input.
     if (grabbedItem && (keyCode === DELETE || keyCode === BACKSPACE) && document.activeElement !== inputElement.elt) {
         console.log("Deleting grabbed item.");
         // Remove from both lists (should only be in one)
@@ -950,13 +1085,14 @@ function addNewTextShapeFromInput() {
      newTextShape.color = pickedColor;
 
 
-     // Spawn location slightly offset from input/canvas area
-     newTextShape.x = random(CANVAS_AREA_X + CANVAS_AREA_W * 0.3, CANVAS_AREA_X + CANVAS_AREA_W * 0.7);
-     newTextShape.y = HEADER_HEIGHT + 50; // Just below header
+     // MODIFIED: Spawn location near the left edge of the canvas area
+     let spawnMargin = 50; // Distance from the canvas area edge
+     newTextShape.x = CANVAS_AREA_X + spawnMargin + random(-20, 20); // Spawn near left edge with slight random offset
+     newTextShape.y = HEADER_HEIGHT + 50 + random(-10, 10); // Just below header with slight random offset
 
      // Gentle floating movement
-     newTextShape.speedX = random(-0.5, 0.5);
-     newTextShape.speedY = random(1, 1.5);
+     newTextShape.speedX = random(0.5, 1); // Move slightly rightwards
+     newTextShape.speedY = random(1, 1.5); // Move downwards
      newTextShape.rotation = random(-0.05, 0.05);
      newTextShape.rotationSpeed = random(-0.0005, 0.0005);
 
@@ -1054,7 +1190,7 @@ function saveCanvasAreaAsHighResPNG() {
 
 
     // Calculate the overall scaling factor needed to blow up the source content
-    // Maintain source aspect ratio (which is fixed 5:4) within target (approx 1:1.413).
+    // Maintain source aspect ratio (which is fixed 1:sqrt(2)) within target (approx 1:1.413).
     // Scale factor is based on fitting the width.
     const scaleFactor = actualTargetWidth / sourceWidth;
 
@@ -1173,130 +1309,8 @@ function saveCanvasAreaAsHighResPNG() {
 }
 
 
-// SAVE PDF function using zenoZeng's p5.pdf library (vector for simple shapes/text)
-// NOTE: This produces a vector PDF based on drawing to the main canvas during record,
-// BUT due to canvas renderer (P2D), text appearance can vary and complex shapes
-// might not be true vectors depending on the library's implementation details
-// and browser print rendering. Raster elements (like images if you added them)
-// would be raster in the PDF.
-// This function works for the simple shapes and text you have defined IF p5.pdf is linked correctly.
-function saveCanvasAreaAsPDF() {
-    console.log("SAVE PDF button pressed (using zenoZeng's p5.pdf)");
+// Removed: SAVE PDF function
 
-    // Check if the p5.pdf library is available
-    if (typeof p5 === 'undefined' || typeof p5.prototype.createPDF !== 'function') {
-         console.error("p5 or p5.pdf library (zenozeng version) not loaded correctly. Check index.html scripts and order: p5.js, p5.svg.js, p5.pdf.js, sketch.js. Clear browser cache!");
-         alert("Error: PDF library not loaded. Check browser console.");
-         return;
-     }
-
-    let pdf;
-     try {
-         // Create a p5.PDF instance, passing the current sketch instance 'this'
-         // Use the global p5 object if 'this.createPDF' isn't available
-         if (p5.prototype.createPDF && typeof p5.prototype.createPDF === 'function') {
-              pdf = p5.prototype.createPDF(this); // Correct way to call prototype method
-         } else if (window.createPDF && typeof window.createPDF === 'function') {
-              pdf = window.createPDF(this); // Fallback global call (less standard)
-         } else {
-             console.error("createPDF function not found or not usable.");
-             alert("Error creating PDF instance.");
-             return;
-         }
-
-
-        if (!pdf) {
-            console.error("createPDF returned null or undefined.");
-            alert("Error creating PDF instance.");
-            return;
-        }
-        console.log("p5.PDF instance created. Starting record.");
-
-        // Begin recording drawing commands on the main canvas context
-        pdf.beginRecord();
-
-        // --- Drawing the Artboard Content for PDF Capture ---
-        // This content will be mapped to a PDF page sized to CANVAS_AREA_W x CANVAS_AREA_H.
-
-        // Set the background of the recorded area (corresponds to the PDF page) to white
-        background(255); // Uses global background, drawing on main canvas temporarily
-
-        // Translate the main canvas's coordinate system
-        // This makes CANVAS_AREA_X, CANVAS_AREA_Y the new (0,0) for subsequent drawing commands
-        push(); // Save global transform state
-        translate(-CANVAS_AREA_X, -CANVAS_AREA_Y); // Shift origin
-
-
-        // Draw placed items using global drawing commands.
-        // Item coords are relative to the original screen. With the translate, they draw
-        // at (item.x - CANVAS_AREA_X, item.y - CANVAS_AREA_Y) which is relative to the artboard's (0,0).
-        // Iterate FORWARDS for correct z-order in PDF
-        for (let i = 0; i < placedItems.length; i++) {
-             let item = placedItems[i];
-
-             // Skip empty text items in PDF output
-              if (item.type === 'text' && (!item.content || item.content.trim() === "" || item.content.trim() === TEXT_OPTIONS[0].trim())) {
-                 continue; // Skip drawing empty text items for PDF
-             }
-
-            // Apply item transformations using global p5 functions
-            push(); // Save current state before item transforms
-            translate(item.x, item.y); // Translate to item center
-            rotate(item.rotation); // Rotate around center
-
-            // Apply item's scale. The combined effect with shape size happens in drawShapePrimitive due to scale()
-            let currentDisplayScale = item.scaleFactor * item.tempScaleEffect; // Including landing scale, though likely 1
-            scale(currentDisplayScale); // Apply item's scale
-
-            // Apply item color style
-            fill(item.color);
-            noStroke(); // Assume no stroke
-
-            // Draw the shape primitive or text centered at (0,0)
-            // This calls methods on 'this' (the main canvas), which p5.pdf records
-             item.drawShapePrimitive(this, 0, 0, item.size, item.shapeType, item.type === 'text', item.textScaleAdjust);
-
-            pop(); // Restore state after item transforms
-        }
-
-        // Optional: Draw border around artboard area in PDF using global commands
-        // Needs to be drawn in the translated context where artboard starts at (0,0)
-         push();
-         stroke(0); strokeWeight(1); noFill();
-         rect(0, 0, CANVAS_AREA_W, CANVAS_AREA_H); // Draw border matching artboard size
-         pop();
-
-
-        // Restore main canvas transform state
-        pop();
-
-        // --- End Drawing commands for PDF context ---
-
-        console.log("Finished recording. Saving PDF.");
-        // Finish recording. Captures the state of the main canvas after drawing commands.
-        pdf.endRecord();
-
-        // Save the captured state as a PDF.
-        // Specify the desired PDF page dimensions (matching artboard).
-        pdf.save({
-            filename: 'myArtboard_pdf_' + generateTimestampString(),
-            width: CANVAS_AREA_W, // PDF page width matches display artboard width
-            height: CANVAS_AREA_H, // PDF page height matches display artboard height
-            margin: {top:0, right:0, bottom:0, left:0} // No margins for exact fit
-        });
-
-        console.log("PDF save initiated.");
-
-     } catch(e) {
-         console.error("An error occurred during PDF generation:", e);
-         alert("Error generating PDF. Check browser console.");
-         // Attempt to safely end recording
-         if (pdf && typeof pdf.endRecord === 'function' && pdf.isRecording) {
-             console.warn("Attempting to call pdf.endRecord() after caught error.");
-             try{ pdf.endRecord(); } catch(endErr) { console.error("Error calling pdf.endRecord() during error handling:", endErr); }
-         }
-     }
-}
 
 // REFRESH button action - Replace floating shapes
 function resetRandom() {
@@ -1356,7 +1370,10 @@ function windowResized() {
      // Recalculate canvas area dimensions and position
      // Ensure CANVAS_AREA_W is reasonable relative to window width
      const adjustedCanvasW = min(CANVAS_AREA_W, windowWidth * 0.95); // Max width 95% of window or original 500
-    CANVAS_AREA_H = adjustedCanvasW * (5 / 4); // Maintain aspect ratio
+
+     // MODIFIED: Calculate height based on 1:sqrt(2) ratio
+    CANVAS_AREA_H = adjustedCanvasW * sqrt(2); // Maintain 1:sqrt(2) aspect ratio
+
     CANVAS_AREA_X = width / 2 - adjustedCanvasW / 2; // Center horizontally
     CANVAS_AREA_Y = HEADER_HEIGHT + 20; // Position below header
     if(CANVAS_AREA_X < 0) CANVAS_AREA_X = 0; // Clamp X
@@ -1367,6 +1384,7 @@ function windowResized() {
     if (inputElement) {
         inputElement.position(CANVAS_AREA_X, headerCenterY - 15);
         inputElement.size(adjustedCanvasW);
+        // Z-index set in setup, persists
     }
 
     // Helper function to get button width safely
@@ -1374,20 +1392,20 @@ function windowResized() {
 
     // Button positioning for the right-aligned group
     let buttonSpacing = 8;
-    let buttonHeight = 30;
+    let buttonHeight = 30; // Approximate height for vertical alignment
     let buttonPadY_buttons = (HEADER_HEIGHT - buttonHeight) / 2;
     let rightMargin = 15;
 
     // Get widths of all buttons
     let savePNGBtnW = btnWidth(savePNGButton);
-    let saveHighResPNGBtnW = btnWidth(saveHighResPNGButton); // New button width
-    let savePDFBtnW = btnWidth(savePDFButton);
+    let saveHighResPNGBtnW = btnWidth(saveHighResPNGButton);
     let clearBtnW = btnWidth(clearButton);
     let refreshBtnW = btnWidth(refreshButton);
+    let helpBtnW = btnWidth(helpButton); // NEW button width
 
     // Calculate total width including all buttons and spacing
-    let totalButtonWidth = savePNGBtnW + saveHighResPNGBtnW + savePDFBtnW + clearBtnW + refreshBtnW;
-    let numButtons = (savePNGButton?1:0) + (saveHighResPNGButton?1:0) + (savePDFButton?1:0) + (clearButton?1:0) + (refreshButton?1:0);
+    let totalButtonWidth = savePNGBtnW + saveHighResPNGBtnW + clearBtnW + refreshBtnW + helpBtnW; // Include help button
+    let numButtons = (savePNGButton?1:0) + (saveHighResPNGButton?1:0) + (clearButton?1:0) + (refreshButton?1:0) + (helpButton?1:0); // Count buttons
      let totalSpacing = (numButtons > 1 ? (numButtons - 1) * buttonSpacing : 0);
 
      // Calculate starting X for the button block from the right edge
@@ -1399,12 +1417,12 @@ function windowResized() {
 
     let currentButtonX = buttonBlockStartX;
 
-    // Position buttons in desired order: REFRESH, CLEAR, SAVE PNG, SAVE HI-RES PNG, SAVE PDF
+    // Position buttons in desired order: REFRESH, CLEAR, SAVE PNG, SAVE HI-RES PNG, HELP (?)
     if (refreshButton) { refreshButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += refreshBtnW + buttonSpacing; }
     if (clearButton) { clearButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += clearBtnW + buttonSpacing; }
     if (savePNGButton) { savePNGButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += savePNGBtnW + buttonSpacing; }
-     if (saveHighResPNGButton) { saveHighResPNGButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += saveHighResPNGBtnW + buttonSpacing; } // Position new button
-    if (savePDFButton) { savePDFButton.position(currentButtonX, buttonPadY_buttons); /* Last button */ }
+     if (saveHighResPNGButton) { saveHighResPNGButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += saveHighResPNGBtnW + buttonSpacing; }
+    if (helpButton) { helpButton.position(currentButtonX, buttonPadY_buttons); /* Last button */ } // Position help button
 
 
      // --- Resize or Recreate canvasPG buffer ---
@@ -1438,4 +1456,22 @@ function windowResized() {
      }
 
      console.log("Finished windowResized.");
+}
+
+// NEW: Function to show the help pop-up
+function showHelpPopup() {
+    console.log("Showing help popup");
+    if (helpPopupContainer) {
+        helpPopupContainer.style.display = 'flex'; // Show the flex container
+        isHelpPopupOpen = true; // Update state
+    }
+}
+
+// NEW: Function to hide the help pop-up
+function hideHelpPopup() {
+    console.log("Hiding help popup");
+    if (helpPopupContainer) {
+        helpPopupContainer.style.display = 'none'; // Hide the container
+        isHelpPopupOpen = false; // Update state
+    }
 }
