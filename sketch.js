@@ -1792,7 +1792,7 @@ function addNewTextShapeFromInput() {
     inputElement.value('');
     inputElement.attribute('placeholder', TEXT_OPTIONS[0]); // Reset placeholder
     inputElement.elt.focus(); // Keep focus for quick entry of next text
-}
+
 
 // Checks if the mouse is within the boundaries of the central canvas artboard area
 // pX, pY are coordinates to check against
