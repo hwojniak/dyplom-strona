@@ -576,6 +576,10 @@ class FloatingShape {
   // Draws the shape's core geometry or text centered at (px, py), with base size psize.
   // Assumes transformations (translate, rotate, scale) are already applied to the 'graphics' context.
   // This function uses methods provided by the graphics context (e.g., graphics.rect, graphics.text).
+    // Draws the shape's core geometry or text centered at (px, py), with base size psize.
+  // Assumes transformations (translate, rotate, scale) are already applied to the 'graphics' context.
+  // This function uses methods provided by the graphics context (e.g., graphics.rect, graphics.text).
+  // Note: This function should ONLY appear ONCE as a method inside the FloatingShape class { ... }
   drawShapePrimitive(graphics, px, py, psize, pshapeType, isText = false, textScaleAdjust = 0.2) {
         // Check if graphics context is valid before attempting to draw primitives
         if (!graphics || typeof graphics.rectMode !== 'function' || typeof graphics.text !== 'function') {
@@ -589,15 +593,6 @@ class FloatingShape {
          }
 
         if (isText) {
-             // This check was done in display(), but redundant safety doesn't hurt if drawPrimitive were called directly.
-             // However, display() already checks and skips for empty/placeholder text.
-             // We allow drawing grab effect for empty text when grabbed on main canvas,
-             // but the actual text content will be invisible if empty.
-             // if (!this.content || this.content.trim() === "" || this.content.trim() === TEXT_OPTIONS[0].trim()) {
-             //    // Don't draw the text glyphs if empty/placeholder
-             //     return;
-             // }
-
              // Apply text properties to the provided graphics context
              graphics.textFont(this.font || baseFont); // Use the item's font or fallback
              graphics.textAlign(CENTER, CENTER); // Set alignment
@@ -608,25 +603,20 @@ class FloatingShape {
 
              graphics.textSize(effectiveTextSize); // Set text size
 
-								drawShapePrimitive(graphics, px, py, psize, pshapeType, isText = false, textScaleAdjust = 0.2) {
-									// ... (initial validity checks) ...
 
-									if (isText) {
-										 // ... (existing font/alignment/size setup) ...
+             // --- START DEBUG: Font Drawing Parameters ---
+             // Uncomment these console.log lines if you are debugging font display
+             /*
+             console.log("Drawing text:", this.content,
+                         "Size:", psize,
+                         "Effective Size:", effectiveTextSize,
+                         "Font Object:", this.font, // Check the actual font object being used
+                         "Font Name/Style:", this.font ? (this.font.font || this.font) : 'N/A', // Try to log name or fallback
+                         "Position:", {px, py},
+                         "Graphics context:", graphics === this ? "Main Canvas" : "canvasPG");
+             */
+             // --- END DEBUG ---
 
-										 // --- START DEBUG: Font Drawing Parameters ---
-										 console.log("Drawing text:", this.content,
-													 "Size:", psize,
-													 "Effective Size:", effectiveTextSize,
-													 "Font Object:", this.font, // Check the actual font object being used
-													 "Font Name/Style:", this.font ? (this.font.font || this.font) : 'N/A', // Try to log name or fallback
-													 "Position:", {px, py},
-													 "Graphics context:", graphics === this ? "Main Canvas" : "canvasPG");
-										 // --- END DEBUG ---
-
-             graphics.text(this.content, px, py); // Draw text centered at px, py
-
-        
 
              graphics.text(this.content, px, py); // Draw text centered at px, py
 
