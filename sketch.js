@@ -1623,11 +1623,63 @@ function keyPressed() {
 // Corrected addNewTextShapeFromInput function
 function addNewTextShapeFromInput() {
     let currentText = inputElement.value();
-    // ... (existing code for checking input, creating newTextShape,
-    // setting type, content, shapeType, size, scaleFactor, textScaleAdjust, color) ...
+    // Only add text if input has content and it's not just the placeholder
+    if (!currentText || currentText.trim() === "" || currentText.trim() === TEXT_OPTIONS[0].trim()) {
+         console.log("Input empty/placeholder, not adding text.");
+         // Add a temporary visual cue to the input field
+         inputElement.style("border-color", "red"); // Change border to red
+         setTimeout(() => inputElement.style("border-color", "#ccc"), 500); // Revert after 500ms
+         inputElement.value(''); // Ensure input is cleared if it was just placeholder+space
+         inputElement.attribute('placeholder', TEXT_OPTIONS[0]); // Reset placeholder
+         inputElement.elt.focus(); // Keep focus on input
+         return; // Exit function early
+    }
+
+    console.log("Adding new text shape:", currentText.trim());
+
+    // --- FIX START: Declare newTextShape FIRST ---
+    let newTextShape = new FloatingShape();
+    // --- FIX END ---
+
+    // Call reset to set initial floating properties (position, speed, rotation, size, scaleFactor etc.)
+    newTextShape.reset();
+
+    // --- Override properties specific to TextShape ---
+    newTextShape.type = 'text';
+    newTextShape.content = currentText.trim(); // Use the trimmed text from the input
+    newTextShape.shapeType = 'none'; // Text items have no shape primitive (aside from text itself)
+
+    // Assign properties from a size category. Use 'medium' category as base.
+    // These might override size/scale from reset(), or you can adjust reset() to use categories.
+    // For now, let's ensure these are set *after* reset().
+    let category = sizeCategories.find(cat => cat.name === 'medium') || { sizeRange: [100, 200], scaleRange: [1.0, 1.5], textScaleAdjust: 0.2 }; // Default if medium not found
+    newTextShape.size = random(category.sizeRange[0] * 0.8, category.sizeRange[1] * 1.2); // Assign a random size around the category's base
+    newTextShape.scaleFactor = 1.0; // Start with default scale (scale can be changed by user later)
+    newTextShape.textScaleAdjust = category.textScaleAdjust; // Get text scale multiplier from category
+    // Font is assigned below
+
+     // Ensure text color has enough contrast against a white background (artboard default)
+     // and also preferably visible against black (floating background)
+     let pickedColor;
+     let attempts = 0;
+     do {
+         pickedColor = color(random(PALETTE));
+         let b = brightness(pickedColor);
+         if (b < 50 && attempts < 5) continue;
+         if (b > 200 && attempts < 5) continue;
+         break;
+     } while (attempts < 10);
+
+      if (brightness(pickedColor) > 200) {
+           pickedColor = color(random(['#0000FE', '#E70012', '#41AD4A', '#000000', '#222222'])); // Pick a known dark color
+      }
+     newTextShape.color = pickedColor;
+     // --- End Override properties specific to TextShape ---
+
 
     // --- Assign a random loaded font ---
     // Create an array of ALL your loaded font variables.
+    // Make sure all font variables you declared and loaded in preload are listed here:
     const potentialFonts = [
         fontBangersRegular,
         fontBoogalooRegular,
@@ -1648,17 +1700,15 @@ function addNewTextShapeFromInput() {
         fontSenRegular,
         fontShareTechMonoRegular,
         fontVT323Regular
-        // Make sure every font variable is listed here!
     ];
 
     // Filter out any variables that didn't load correctly (will be null, undefined, or 'monospace' string)
-    // We want to pick only from the actual p5.Font objects that loaded successfully.
     const usableFonts = potentialFonts.filter(f => f && typeof f.text === 'function'); // Checks if variable holds a valid p5.Font object
 
     // If there are usable loaded fonts, pick one randomly. Otherwise, fall back to the default baseFont string.
     if (usableFonts.length > 0) {
-        newTextShape.font = random(usableFonts); // Assign a random p5.Font object from the loaded ones
-         console.log("Assigned random loaded font to new text shape:", newTextShape.font.font); // Log the font name/style if available
+        newTextShape.font = random(usableFonts); // Assign a random p5.Font object
+         console.log("Assigned random loaded font to new text shape:", newTextShape.font.font); // Log the font name/style
     } else {
         newTextShape.font = baseFont; // Fallback (will be 'monospace' string)
          console.warn("No custom fonts loaded successfully for new text shape. Using baseFont fallback:", newTextShape.font);
@@ -1666,12 +1716,58 @@ function addNewTextShapeFromInput() {
     // --- End font assignment ---
 
 
-    // ... (rest of the spawning location, speed, rotation logic) ...
-    // Ensure floating state etc is set (newTextShape.isGrabbed = false; etc.)
+     // --- Apply Custom SPAWN LOCATION for new text (near artboard sides), OVERRIDING reset() position/speed ---
+     let spawnMargin = 40;
+     let spawnedCustom = false; // Flag to track if custom spawn was applied
+
+     let leftSpace = CANVAS_AREA_X;
+     let rightSpace = width - (CANVAS_AREA_X + CANVAS_AREA_W);
+
+     let spawnSide;
+     if (leftSpace > rightSpace * 1.5) {
+         spawnSide = 'left';
+     } else if (rightSpace > leftSpace * 1.5) {
+         spawnSide = 'right';
+     } else {
+         spawnSide = random() > 0.5 ? 'right' : 'left';
+     }
+
+     if (spawnSide === 'left' && leftSpace > spawnMargin * 2) {
+         newTextShape.x = random(spawnMargin, CANVAS_AREA_X - spawnMargin);
+         newTextShape.speedX = random(0.5, 1.5);
+         spawnedCustom = true;
+     } else if (rightSpace > spawnMargin * 2) {
+         newTextShape.x = random(CANVAS_AREA_X + CANVAS_AREA_W + spawnMargin, width - spawnMargin);
+         newTextShape.speedX = random(-1.5, -0.5);
+         spawnedCustom = true;
+     }
+
+     if (spawnedCustom) {
+          console.log(`Adding new text shape: Spawning near artboard (${spawnSide} side).`);
+          // Apply custom Y and speeds, overriding those from reset()
+          newTextShape.y = random(CANVAS_AREA_Y - spawnMargin, CANVAS_AREA_Y + CANVAS_AREA_H + spawnMargin);
+          newTextShape.y = max(newTextShape.y, HEADER_HEIGHT + spawnMargin);
+          newTextShape.y = max(spawnMargin, min(newTextShape.y, height - spawnMargin)); // Clamp Y to window bounds + margin
+
+          newTextShape.speedY = random(-0.5, 0.5);
+          newTextShape.rotation = random(TWO_PI); // Initial random rotation
+          newTextShape.rotationSpeed = random(-0.001, 0.001); // Very slow random rotation
+
+     } else {
+          // If custom spawn couldn't happen, the item retains its default off-screen position/speed from newTextShape.reset()
+           console.log("Adding new text shape: Side areas too small or zero space, using default off-screen spawn from reset().");
+          // No need to call reset() again here, it was called at the start.
+     }
+    // --- End Custom SPAWN LOCATION ---
+
+
+    // Ensure state is floating (reset() already does this, but defensive)
+    newTextShape.isGrabbed = false;
+    newTextShape.isPlacing = false;
 
     shapes.push(newTextShape); // Add to floating shapes array
 
-    // ... (rest of the input clearing and focusing logic) ...
+    // Clear input field after adding text
     inputElement.value('');
     inputElement.attribute('placeholder', TEXT_OPTIONS[0]); // Reset placeholder
     inputElement.elt.focus(); // Keep focus for quick entry of next text
