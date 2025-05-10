@@ -626,10 +626,7 @@ class FloatingShape {
 
              graphics.text(this.content, px, py); // Draw text centered at px, py
 
-         } else { // It's a shape
-           // ... (existing shape drawing code) ...
-         }
-   }
+        
 
              graphics.text(this.content, px, py); // Draw text centered at px, py
 
