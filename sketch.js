@@ -17,18 +17,19 @@ let clearButton;
 
 // Layout constants
 const HEADER_HEIGHT = 80;
-const CANVAS_AREA_W = 500; // Fixed width of the artboard (Source for high-res scaling)
+const CANVAS_AREA_W_BASE = 500; // Fixed width base for ratio (Source for high-res scaling)
+let CANVAS_AREA_W; // Actual width calculated in setup/resize
 let CANVAS_AREA_H; // Calculated in setup based on ratio
 let CANVAS_AREA_X; // Calculated in setup based on window width
 let CANVAS_AREA_Y; // Calculated in setup
 
 // Appearance constants
 const PALETTE = [
-  '#0000FE', // Blue 
-  '#FFDD00', // Yellow 
-  '#E70012', // Red 
-  '#FE4DD3', // Pink 
-  '#41AD4A', // Green 
+  '#0000FE', // Blue
+  '#FFDD00', // Yellow
+  '#E70012', // Red
+  '#FE4DD3', // Pink
+  '#41AD4A', // Green
   '#000000', // Black
   '#222222', // Grey
   '#FFFFFF', // White
@@ -47,6 +48,31 @@ const TEXT_OPTIONS = [
 ];
 
 let baseFont = 'monospace'; // Default font, can be loaded
+
+// --- START: Variables for ALL Loaded Fonts ---
+let fontBangersRegular;
+let fontBoogalooRegular;
+let fontBreeSerifRegular;
+let fontCaveatBrushRegular;
+let fontCherryBombOneRegular;
+let fontCinzelDecorativeBlack;
+let fontCinzelDecorativeBold;
+let fontCinzelDecorativeRegular;
+let fontDynaPuffBold;
+let fontDynaPuffMedium;
+let fontDynaPuffRegular;
+let fontInterBold;
+let fontInterRegular;
+let fontPixelifySansRegular;
+let fontSenBold;
+let fontSenMedium;
+let fontSenRegular;
+let fontShareTechMonoRegular;
+let fontVT323Regular;
+// --- END: Variables for ALL Loaded Fonts ---
+
+let logoImage;        // Variable to hold the loaded SVG logo
+
 
 let SNAP_INCREMENT_RADIANS;
 
@@ -68,7 +94,7 @@ function transformPointToLocal(gx, gy, objX, objY, objRotation, objScale) {
   // Add check for zero scale to prevent division by zero or infinity
   if (objScale === 0) {
       // Cannot transform relative to an object with zero scale
-       console.warn("transformPointToLocal: Object scale is 0.");
+       // console.warn("transformPointToLocal: Object scale is 0."); // Keep console logs for debugging
       return { x: NaN, y: NaN }; // Indicate invalid transformation
   }
   let tx = gx - objX;
@@ -86,7 +112,7 @@ function transformPointToLocal(gx, gy, objX, objY, objRotation, objScale) {
 function isPointInAxisAlignedRect(px, py, w, h, tolerance = 0) {
     // Add check for invalid dimensions
      if (isNaN(px) || isNaN(py) || isNaN(w) || isNaN(h) || w <= 0 || h <= 0) {
-        // console.warn("isPointInAxisAlignedRect: Invalid point or rectangle dimensions.");
+        // console.warn("isPointInAxisAlignedRect: Invalid point or rectangle dimensions."); // Keep console logs for debugging
          return false;
     }
     let halfW = w / 2;
@@ -98,7 +124,7 @@ function isPointInAxisAlignedRect(px, py, w, h, tolerance = 0) {
 // Used for checking proximity to polygon edges in local coordinates.
 function distToSegment(px, py, x1, y1, x2, y2) {
     if (isNaN(px) || isNaN(py) || isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) {
-         // console.warn("distToSegment: Invalid input coordinates.");
+         // console.warn("distToSegment: Invalid input coordinates."); // Keep console logs for debugging
          return Infinity; // Indicate unable to calculate distance
     }
   let l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
@@ -119,10 +145,6 @@ function getTriangleVertices(size) {
      if (isNaN(size) || size <= 0) return []; // Invalid size
     let h = size * 0.8; // This should correspond to the total vertical extent or some scale factor in drawing
     // Vertices relative to (0,0) to match your drawShapePrimitive implementation:
-    // Top: (0, -h/2) or perhaps match your existing draw logic's vertical placement
-    // Looking at drawShapePrimitive: top is py - psize * 0.8, bottom points are py + psize * 0.4
-    // This suggests a total vertical span of psize * 1.2, centered slightly below 0,0?
-    // Let's derive vertices that are roughly centered around (0,0) given your points:
     // Your points: (0, -S*0.8), (-S*0.8, S*0.4), (S*0.8, S*0.4)
     // Centroid Y: (-S*0.8 + S*0.4 + S*0.4) / 3 = 0
     // X for bottom: (-S*0.8 + S*0.8)/2 = 0
@@ -173,35 +195,41 @@ function isPointInConvexPolygon(px, py, vertices) {
     if (isNaN(px) || isNaN(py) || !Array.isArray(vertices) || vertices.length < 3) return false;
   let numVertices = vertices.length;
   let has_pos = false, has_neg = false;
+
+  // Declare cross_product variable BEFORE the loop
+  let cross_product; // Declare in function scope
+
   for (let i = 0; i < numVertices; i++) {
     let v1 = vertices[i], v2 = vertices[(i + 1) % numVertices];
      if (isNaN(v1.x) || isNaN(v1.y) || isNaN(v2.x) || isNaN(v2.y)) {
-         // console.warn("isPointInConvexPolygon: Invalid vertex coordinates.");
-         return false;
+         // console.warn("isPointInConvexPolygon: Invalid vertex coordinates."); // Keep console logs for debugging
+         return false; // Cannot reliably check if vertices are invalid
      }
-    // Cross product check (point on one side of edge vector)
-    let cross_product = (v2.x - v1.x) * (py - v1.y) - (v2.y - v1.y) * (px - v1.x);
+    // Calculate cross product (don't use 'let' here anymore)
+    cross_product = (v2.x - v1.x) * (py - v1.y) - (v2.y - v1.y) * (px - v1.x);
+
     // Use a small epsilon for floating point comparisons
     if (cross_product > 1e-6) has_pos = true;
     if (cross_product < -1e-6) has_neg = true;
-    if (has_pos && has_neg) return false; // Point is not strictly inside if it's on both sides of different edges
-  }
-   // If not straddling the polygon (always on one side or on an edge), it's inside or on boundary
-   // We need to be careful: if *all* cross products are zero, the point is collinear with vertices on a line/segment.
-   // For a closed polygon, if point is collinear with one edge AND not outside bounds of the vertices projections,
-   // it might be on the edge. If only positive or only negative flags were set, it means point was on one side or boundary.
-   // If any vertex has NaN/Infinity coordinates, cross product will be NaN. Need to check cross_product results.
-   if (isNaN(cross_product)) return false; // Check for invalid calculations
 
-   // Simplified: If not found to be on both sides of the polygon edges, it's inside or on the boundary.
-   return !(has_pos && has_neg); // If point wasn't strictly separated by edges
+    // If signs are different (point crosses an edge), it's outside
+    if (has_pos && has_neg) return false;
+  }
+
+   // Remove the flawed isNaN check here. If the loop completed,
+   // the point was consistently on one side (or on an edge), so it's inside or on boundary.
+   // The `isPointNearPolygonEdge` check handles the "on boundary" case with tolerance.
+   // This function only needs to check for strictly inside or on boundary without tolerance.
+   // The original logic `return !(has_pos && has_neg);` was correct for the core test.
+   // If loop completes, it means has_pos && has_neg is false.
+   return true; // If we reached here, the point is inside or on the boundary
 }
 
 
 // Checks if a point is near any edge of a polygon within a tolerance (local coords).
 function isPointNearPolygonEdge(px, py, vertices, tolerance) {
      if (isNaN(px) || isNaN(py) || !Array.isArray(vertices) || vertices.length < 2 || isNaN(tolerance) || tolerance < 0) {
-          // console.warn("isPointNearPolygonEdge: Invalid input or vertices.");
+          // console.warn("isPointNearPolygonEdge: Invalid input or vertices."); // Keep console logs for debugging
           return false;
      }
      for (let i = 0; i < vertices.length; i++) {
@@ -220,7 +248,7 @@ let textMeasurePG; // Declare the global variable here
 function getTextBounds(content, effectiveTextSize, baseFontRef) {
     // console.log("getTextBounds called with:", content, effectiveTextSize, baseFontRef); // Debugging line
      if (typeof content !== 'string' || isNaN(effectiveTextSize) || effectiveTextSize <= 0) {
-          // console.warn("getTextBounds: Invalid input (content, size).");
+          // console.warn("getTextBounds: Invalid input (content, size)."); // Keep console logs for debugging
           return { w: 0, h: 0 }; // Return zero bounds for invalid input
      }
 
@@ -442,7 +470,7 @@ class FloatingShape {
         let maxEffectiveDimension = this.calculateMaxEffectiveDimension();
         if (isNaN(maxEffectiveDimension) || maxEffectiveDimension <= 0) {
             // Cannot determine if off-screen for invalid object, treat as not off-screen to prevent erroneous removal
-            // console.warn("isReallyOffScreen: Cannot determine dimension for item, skipping removal check.", this);
+            // console.warn("isReallyOffScreen: Cannot determine dimension for item, skipping removal check.", this); // Keep console logs for debugging
              return false;
         }
       let effectiveRadius = maxEffectiveDimension / 2 * this.scaleFactor;
@@ -486,7 +514,7 @@ class FloatingShape {
   display(graphics, showGrabEffect = false, offsetX = 0, offsetY = 0) {
     // Check if graphics context is valid before drawing
      if (!graphics || typeof graphics.push !== 'function' || typeof graphics.translate !== 'function' || typeof graphics.rotate !== 'function' || typeof graphics.scale !== 'function') {
-        // console.warn("Invalid graphics context passed to display for item:", this);
+        // console.warn("Invalid graphics context passed to display for item:", this); // Keep console logs for debugging
         return; // Skip drawing if context is invalid
     }
 
@@ -551,12 +579,12 @@ class FloatingShape {
   drawShapePrimitive(graphics, px, py, psize, pshapeType, isText = false, textScaleAdjust = 0.2) {
         // Check if graphics context is valid before attempting to draw primitives
         if (!graphics || typeof graphics.rectMode !== 'function' || typeof graphics.text !== 'function') {
-             // console.warn("Invalid graphics context in drawShapePrimitive for item:", this);
+             // console.warn("Invalid graphics context in drawShapePrimitive for item:", this); // Keep console logs for debugging
              return; // Skip drawing if context is invalid
          }
 
          if (isNaN(px) || isNaN(py) || isNaN(psize) || psize <= 0) {
-             // console.warn("drawShapePrimitive: Invalid px, py, or psize.", {px, py, psize, item: this});
+             // console.warn("drawShapePrimitive: Invalid px, py, or psize.", {px, py, psize, item: this}); // Keep console logs for debugging
              if(!isText) return; // Shapes need valid size, text can sometimes draw placeholder? But draw empty skipped.
          }
 
@@ -585,7 +613,7 @@ class FloatingShape {
          } else { // It's a shape
               // Check if psize is valid before drawing shape primitives that depend on it
               if (isNaN(psize) || psize <= 0) {
-                   // console.warn("drawShapePrimitive: Invalid psize for shape.", {psize, item: this});
+                   // console.warn("drawShapePrimitive: Invalid psize for shape.", {psize, item: this}); // Keep console logs for debugging
                    return; // Cannot draw shape without valid size
                }
               graphics.rectMode(CENTER); // Set rect drawing mode on this context
@@ -627,7 +655,7 @@ class FloatingShape {
                  break;
                default:
                    // Should not happen if shapeType is correctly picked, but defensive.
-                  // console.warn("drawShapePrimitive: Unknown shape type:", pshapeType);
+                  // console.warn("drawShapePrimitive: Unknown shape type:", pshapeType); // Keep console logs for debugging
                  break; // Draw nothing for unknown types
              }
          }
@@ -639,11 +667,11 @@ class FloatingShape {
         // Perform basic sanity checks on item properties needed for transformation/collision
        if (isNaN(this.x) || isNaN(this.y) || isNaN(mx) || isNaN(my) || isNaN(this.rotation) ||
            isNaN(this.scaleFactor) || isNaN(this.size) || this.scaleFactor <= 0 || this.size <= 0) {
-             // console.warn("isMouseOver: Invalid object state or zero size/scale:", this);
+             // console.warn("isMouseOver: Invalid object state or zero size/scale:", this); // Keep console logs for debugging
             return false; // Cannot click on an invalid or zero-sized item
        }
 
-        // Cannot click on empty text items unless it's the grabbed item (which allows text input).
+        // Cannot click on empty text items unless it's the grabbed item (to allow editing, only happens on main canvas).
         // If text is grabbed, input populates, and content might become temp empty before drop/discard.
         // We rely on isGrabbed check and input state managed in mouseReleased.
         // For non-grabbed items, skip if text is empty or placeholder.
@@ -675,7 +703,7 @@ class FloatingShape {
             // Get text bounds (width/height) in local coordinate space (centered at 0,0)
            // Ensure valid effective text size before getting bounds
            if (isNaN(effectiveTextSize) || effectiveTextSize <= 0) {
-               // console.warn("isMouseOver: Invalid effective text size.", {effectiveTextSize, item: this});
+               // console.warn("isMouseOver: Invalid effective text size.", {effectiveTextSize, item: this}); // Keep console logs for debugging
                 return false;
             }
             // Use item's font for bounds check consistency
@@ -690,7 +718,7 @@ class FloatingShape {
             // Size property refers to the base size used before scaleFactor
              // Ensure base size is valid for shape checks
              if (isNaN(this.size) || this.size <= 0) {
-                  // console.warn("isMouseOver: Invalid base size for shape.", {size: this.size, item: this});
+                  // console.warn("isMouseOver: Invalid base size for shape.", {size: this.size, item: this}); // Keep console logs for debugging
                    return false;
              }
            switch (this.shapeType) {
@@ -724,7 +752,7 @@ class FloatingShape {
               default:
                    // Fallback circular check for safety, uses calculated rough dimension scaled back by factor
                    // Need to re-think default... let's use a size-based radius * half sqrt 2?
-                  //console.warn("isMouseOver: Fallback check for unknown shape type:", this.shapeType);
+                  //console.warn("isMouseOver: Fallback check for unknown shape type:", this.shapeType); // Keep console logs for debugging
                    // Using item.size directly as a radius estimate
                    return dist(localMx, localMy, 0, 0) <= this.size * 0.7 + localTolerance; // Approx radius fallback
 
@@ -738,27 +766,99 @@ class FloatingShape {
 
 
 function preload() {
-  // Custom font loading example - Load actual p5.Font objects here
-  // Example (assuming the files exist):
-  // try {
-  //    baseFont = loadFont('assets/your_primary_font.otf'); // Or TTF, WOFF, WOFF2
-  //    console.log("Loaded baseFont:", baseFont);
-  //    // You could load multiple fonts here:
-  //    // anotherFont = loadFont('assets/another_font.ttf');
-  //    // exoticFont = loadFont('assets/exotic_font.woff2');
-  // } catch (e) {
-  //    console.warn("Failed to load custom baseFont. Using default monospace.", e);
-  //    baseFont = 'monospace'; // Fallback to CSS font name
-  // }
-   // IMPORTANT: If loadFont fails, baseFont remains undefined until it errors or load.
-   // Better: Initialize baseFont as CSS string, try loading, update if success.
-   baseFont = 'monospace'; // Initialize as a safe CSS font string first
-   // Optional: async loading try-catch block or check font.readyState in setup
-   // Let's keep it simple for now and rely on P5's font loading if loadFont is called.
-   // For the provided code using 'monospace' string initially and only trying to set if baseFont is truthy:
-   // baseFont string should work universally.
+  // Keep the initial baseFont as a CSS string fallback.
+  // This will be used if NO fonts successfully load.
+   baseFont = 'monospace';
+
+  // --- START: Load ALL specific fonts and logo ---
+
+  try {
+    // Load ALL Fonts:
+    fontBangersRegular = loadFont('assets/Bangers-Regular.ttf', () => { console.log("Font 'Bangers-Regular' loaded."); }, (err) => { console.error("Failed to load font 'Bangers-Regular':", err); });
+    console.log("Attempting to load font 'Bangers-Regular'...");
+
+    fontBoogalooRegular = loadFont('assets/Boogaloo-Regular.ttf', () => { console.log("Font 'Boogaloo-Regular' loaded."); }, (err) => { console.error("Failed to load font 'Boogaloo-Regular':", err); });
+    console.log("Attempting to load font 'Boogaloo-Regular'...");
+
+    fontBreeSerifRegular = loadFont('assets/BreeSerif-Regular.ttf', () => { console.log("Font 'BreeSerif-Regular' loaded."); }, (err) => { console.error("Failed to load font 'BreeSerif-Regular':", err); });
+    console.log("Attempting to load font 'BreeSerif-Regular'...");
+
+    fontCaveatBrushRegular = loadFont('assets/CaveatBrush-Regular.ttf', () => { console.log("Font 'CaveatBrush-Regular' loaded."); }, (err) => { console.error("Failed to load font 'CaveatBrush-Regular':", err); });
+    console.log("Attempting to load font 'CaveatBrush-Regular'...");
+
+    fontCherryBombOneRegular = loadFont('assets/CherryBombOne-Regular.ttf', () => { console.log("Font 'CherryBombOne-Regular' loaded."); }, (err) => { console.error("Failed to load font 'CherryBombOne-Regular':", err); });
+    console.log("Attempting to load font 'CherryBombOne-Regular'...");
+
+    fontCinzelDecorativeBlack = loadFont('assets/CinzelDecorative-Black.ttf', () => { console.log("Font 'CinzelDecorative-Black' loaded."); }, (err) => { console.error("Failed to load font 'CinzelDecorative-Black':", err); });
+    console.log("Attempting to load font 'CinzelDecorative-Black'...");
+
+    fontCinzelDecorativeBold = loadFont('assets/CinzelDecorative-Bold.ttf', () => { console.log("Font 'CinzelDecorative-Bold' loaded."); }, (err) => { console.error("Failed to load font 'CinzelDecorative-Bold':", err); });
+    console.log("Attempting to load font 'CinzelDecorative-Bold'...");
+
+    fontCinzelDecorativeRegular = loadFont('assets/CinzelDecorative-Regular.ttf', () => { console.log("Font 'CinzelDecorative-Regular' loaded."); }, (err) => { console.error("Failed to load font 'CinzelDecorative-Regular':", err); });
+    console.log("Attempting to load font 'CinzelDecorative-Regular'...");
+
+    fontDynaPuffBold = loadFont('assets/DynaPuff-Bold.ttf', () => { console.log("Font 'DynaPuff-Bold' loaded."); }, (err) => { console.error("Failed to load font 'DynaPuff-Bold':", err); });
+    console.log("Attempting to load font 'DynaPuff-Bold'...");
+
+    fontDynaPuffMedium = loadFont('assets/DynaPuff-Medium.ttf', () => { console.log("Font 'DynaPuff-Medium' loaded."); }, (err) => { console.error("Failed to load font 'DynaPuff-Medium':", err); });
+    console.log("Attempting to load font 'DynaPuff-Medium'...");
+
+    fontDynaPuffRegular = loadFont('assets/DynaPuff-Regular.ttf', () => { console.log("Font 'DynaPuff-Regular' loaded."); }, (err) => { console.error("Failed to load font 'DynaPuff-Regular':", err); });
+    console.log("Attempting to load font 'DynaPuff-Regular'...");
+
+    fontInterBold = loadFont('assets/Inter-Bold.ttf', () => { console.log("Font 'Inter-Bold' loaded."); }, (err) => { console.error("Failed to load font 'Inter-Bold':", err); });
+    console.log("Attempting to load font 'Inter-Bold'...");
+
+    fontInterRegular = loadFont('assets/Inter-Regular.ttf', () => { console.log("Font 'Inter-Regular' loaded."); }, (err) => { console.error("Failed to load font 'Inter-Regular':", err); });
+    console.log("Attempting to load font 'Inter-Regular'...");
+
+    fontPixelifySansRegular = loadFont('assets/PixelifySans-Regular.ttf', () => { console.log("Font 'PixelifySans-Regular' loaded."); }, (err) => { console.error("Failed to load font 'PixelifySans-Regular':", err); });
+    console.log("Attempting to load font 'PixelifySans-Regular'...");
+
+    fontSenBold = loadFont('assets/Sen-Bold.ttf', () => { console.log("Font 'Sen-Bold' loaded."); }, (err) => { console.error("Failed to load font 'Sen-Bold':", err); });
+    console.log("Attempting to load font 'Sen-Bold'...");
+
+    fontSenMedium = loadFont('assets/Sen-Medium.ttf', () => { console.log("Font 'Sen-Medium' loaded."); }, (err) => { console.error("Failed to load font 'Sen-Medium':", err); });
+    console.log("Attempting to load font 'Sen-Medium'...");
+
+    fontSenRegular = loadFont('assets/Sen-Regular.ttf', () => { console.log("Font 'Sen-Regular' loaded."); }, (err) => { console.error("Failed to load font 'Sen-Regular':", err); });
+    console.log("Attempting to load font 'Sen-Regular'...");
+
+    fontShareTechMonoRegular = loadFont('assets/ShareTechMono-Regular.ttf', () => { console.log("Font 'ShareTechMono-Regular' loaded."); }, (err) => { console.error("Failed to load font 'ShareTechMono-Regular':", err); });
+    console.log("Attempting to load font 'ShareTechMono-Regular'...");
+
+    fontVT323Regular = loadFont('assets/VT323-Regular.ttf', () => { console.log("Font 'VT323-Regular' loaded."); }, (err) => { console.error("Failed to load font 'VT323-Regular':", err); });
+    console.log("Attempting to load font 'VT323-Regular'...");
+
+
+    // Load the SVG Logo (already added in previous step)
+    logoImage = loadImage('assets/placeholder-logo.svg',
+                          () => { console.log("Logo 'placeholder-logo.svg' loaded."); }, // Success callback
+                          (err) => { // Error callback
+                            console.error("Failed to load logo 'placeholder-logo.svg':", err);
+                             // Handle error - maybe draw placeholder text instead in draw()?
+                          }
+                         );
+     console.log("Attempting to load logo 'placeholder-logo.svg'...");
+
+
+  } catch (e) {
+    console.error("Error occurred during asset loading in preload:", e);
+    // Catch potential errors if loadFont or loadImage calls themselves fail for some reason
+    // Add fallback assignments here for all font variables if needed, similar to the previous step
+    // e.g., if (typeof fontBangersRegular !== 'object' || fontBangersRegular === null) fontBangersRegular = 'monospace';
+    // ... repeat for all font variables ...
+  }
+
+
+
+   // --- END: ADD YOUR FONT LOADING CODE HERE ---
+
 
 }
+let canvasPG; // Global reference to the graphics buffer for the central canvas area
+let initialPositioningDone = false; // Flag for initial DOM positioning
 
 function setup() {
   // Use standard canvas for live rendering (PNG, browser view)
@@ -775,21 +875,9 @@ function setup() {
 
   SNAP_INCREMENT_RADIANS = radians(15);
 
-  // Calculate initial canvas area dimensions and position
-   // Ensure CANVAS_AREA_W is reasonable if windowWidth is very small
-  const adjustedCanvasW = min(CANVAS_AREA_W, windowWidth * 0.95); // Give slightly more side room if window narrow
-
-  CANVAS_AREA_H = adjustedCanvasW * (5 / 4); // Maintain 5:4 aspect ratio
-  CANVAS_AREA_X = width / 2 - adjustedCanvasW / 2; // Center horizontally
-  CANVAS_AREA_Y = HEADER_HEIGHT + 20; // Position below header + some padding
-  if(CANVAS_AREA_X < 10) CANVAS_AREA_X = 10; // Ensure min left margin
-  if(CANVAS_AREA_Y < HEADER_HEIGHT + 10) CANVAS_AREA_Y = HEADER_HEIGHT + 10; // Ensure min top margin below header
-
-
   // Create/Recreate canvas graphics buffer for the visible artboard area
-  // Check if buffer needs recreation or just size update in windowResized
-  // Better to handle this only in windowResized where resizeCanvas exists
-    canvasPG = createGraphics(adjustedCanvasW, CANVAS_AREA_H);
+  // Initial size might be approximate, will be corrected by positionDOMElementsAndCanvasPG
+    canvasPG = createGraphics(10, 10); // Create small buffer initially
     canvasPG.background(255); // Initial white background
 
 
@@ -797,25 +885,46 @@ function setup() {
      // It can be small, just needs a context to measure text.
      // Use 1x1 buffer minimum, not 0 size.
      textMeasurePG = createGraphics(1, 1); // Smallest possible size, but > 0
-     // Ensure the font is set on this buffer's context immediately
-     if (baseFont && typeof textMeasurePG.textFont === 'function') {
-         textMeasurePG.textFont(baseFont);
-     } else if (typeof textMeasurePG.textFont === 'function') {
-          // Fallback if baseFont isn't loaded yet or is null
-         textMeasurePG.textFont('monospace');
+	 
+	 // In setup() after createGraphics(1, 1) for textMeasurePG:
+if (fontSenRegular && typeof fontSenRegular.text === 'function') { // Example: Use Sen-Regular as the default for measurement
+    textMeasurePG.textFont(fontSenRegular);
+} else if (baseFont && typeof textMeasurePG.textFont === 'function') {
+    textMeasurePG.textFont(baseFont); // Fallback to monospace string
+}
+
+
+// In positionDOMElementsAndCanvasPG() when recreating textMeasurePG:
+if (!textMeasurePG || typeof textMeasurePG.textWidth !== 'function') {
+     // ... existing cleanup code ...
+     try {
+          textMeasurePG = createGraphics(10, 10); // Small valid size
+          // Re-apply essential text properties
+           if (fontSenRegular && typeof fontSenRegular.text === 'function') { // Example: Use Sen-Regular as the default for measurement
+               textMeasurePG.textFont(fontSenRegular);
+           } else if (baseFont && typeof textMeasurePG.textFont === 'function') {
+               textMeasurePG.textFont(baseFont); // Fallback to monospace string
+           }
+           if (typeof textMeasurePG.textAlign === 'function') textMeasurePG.textAlign(CENTER, CENTER);
+     } catch(e) {
+          // ... error handling ...
      }
-     if (typeof textMeasurePG.textAlign === 'function') textMeasurePG.textAlign(CENTER, CENTER);
+}
+	 
+     // Ensure the font is set on this buffer's context immediately
+     if (baseFont && typeof textMeasurePG.textFont === 'function') { // Check if baseFont is usable and method exists
+         textMeasurePG.textFont(baseFont);
+     } else if (typeof textMeasurePG.textFont === 'function'){
+          // Fallback to a default font if baseFontRef is not provided or invalid
+         textMeasurePG.textFont('monospace'); // Or another safe default
+     }
 
 
-  let headerCenterY = HEADER_HEIGHT / 2;
-
-  // Input element setup - Create and position initially
+  // --- Input element setup ---
   inputElement = createInput();
   inputElement.value('');
   inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-   // Position relative to the calculated CANVAS_AREA_X/Y in header space
-  inputElement.position(CANVAS_AREA_X, headerCenterY - 15); // Position vertically centered in header zone, maybe adjusted slightly
-  inputElement.size(adjustedCanvasW); // Match input width to adjusted artboard width
+  // Initial styling (position/size will be handled in positioning function)
   inputElement.style("padding", "5px 10px")
                .style("border", "1px solid #ccc")
                .style("border-radius", "15px")
@@ -833,15 +942,15 @@ function setup() {
     }
   });
 
-  // --- Button setup (positioned in windowResized) ---
-  // Create buttons as global variables, positioning handled in windowResized
+  // --- Button setup ---
+  // Create buttons as global variables, positioning handled in positionDOMElementsAndCanvasPG
   savePNGButton = createButton("SAVE PNG");
   saveHighResPNGButton = createButton("SAVE HI-RES PNG"); // New button
   savePDFButton = createButton("SAVE PDF");
   clearButton = createButton("CLEAR");
   refreshButton = createButton("REFRESH");
 
-  // Basic Button Styling (More specific styles applied in windowResized)
+  // Basic Button Styling
    const baseButtonStyle = {
        padding: "5px 10px",
        border: "1px solid #888",
@@ -857,34 +966,45 @@ function setup() {
            Object.keys(baseButtonStyle).forEach(styleKey => {
                 btn.style(styleKey, baseButtonStyle[styleKey]);
            });
-            // Add basic hover effect - doesn't need to be complex for this v1 update
-            btn.elt.onmouseover = function() { this.style.backgroundColor = 'rgba(220, 220, 220, 0.9)'; }
-            btn.elt.onmouseout = function() { this.style.backgroundColor = baseButtonStyle["background-color"]; }
-
+            // Add basic hover effect
+            // Use addEventListener for safety/consistency, though .on<event> is fine for simple cases
+             btn.elt.addEventListener('mouseover', function() { this.style.backgroundColor = 'rgba(220, 220, 220, 0.9)'; });
+             btn.elt.addEventListener('mouseout', function() { this.style.backgroundColor = baseButtonStyle["background-color"]; });
        }
    });
 
 
-  // Bind mouse events - Moved binding from within mousePressed/Released to setup
-   savePNGButton.mousePressed(saveCanvasAreaAsPNG); // Binds to original PNG save
-   saveHighResPNGButton.mousePressed(saveCanvasAreaAsHighResPNG); // Binds to NEW high-res PNG save
-   savePDFButton.mousePressed(saveCanvasAreaAsPDF);
-   clearButton.mousePressed(restartAll);
-   refreshButton.mousePressed(resetRandom);
+  // Bind mouse events
+   // Use addEventListener for consistency with keypress and touch events
+   if(savePNGButton) savePNGButton.elt.addEventListener('click', saveCanvasAreaAsPNG); // Use .elt for native events
+   if(saveHighResPNGButton) saveHighResPNGButton.elt.addEventListener('click', saveCanvasAreaAsHighResPNG);
+   if(savePDFButton) savePDFButton.elt.addEventListener('click', saveCanvasAreaAsPDF);
+   if(clearButton) clearButton.elt.addEventListener('click', restartAll);
+   if(refreshButton) refreshButton.elt.addEventListener('click', resetRandom);
 
 
-   // Initial positioning of DOM elements after creation/styling
-   // Call windowResized initially to place elements and resize canvasPG
-   windowResized(); // Calls once initially
+   // Initial positioning will be handled in the first draw cycle.
+   initialPositioningDone = false; // Ensure flag is false initially
+
 
   // Create initial floating shapes
   while (shapes.length < 30) { shapes.push(new FloatingShape()); }
 
 }
 
-let canvasPG; // Global reference to the graphics buffer for the central canvas area
 
 function draw() {
+    // Perform initial positioning of DOM elements and canvasPG on the first draw frame
+    if (!initialPositioningDone) {
+        console.log("First draw cycle: Performing initial DOM element and canvasPG positioning.");
+        positionDOMElementsAndCanvasPG(); // Call positioning logic
+        initialPositioningDone = true; // Set flag so it only runs once
+         // Note: This might happen *before* the browser has fully calculated offsetWidth/Height in rare cases,
+         // leading to incorrect initial positions. A small setTimeout(position..., 0) at end of setup is
+         // sometimes more reliable, but this first-draw method often works.
+         // The positionDOMElementsAndCanvasPG function has fallback logic for width/height.
+    }
+
   // Set background for the main sketch window (black background as per request)
   background(0);
 
@@ -914,6 +1034,18 @@ function draw() {
       item.updateLanding();
   }
 
+  // --- Draw floating shapes on main canvas (behind artboard) ---
+  // Iterate FORWARDS to ensure correct drawing order (newer added are at end, potentially drawn later/on top)
+  for (let i = 0; i < shapes.length; i++) {
+      let shape = shapes[i];
+      // Only draw if it's not the currently grabbed item
+      // Grabbed item is drawn separately on top later in draw loop
+      if (shape !== grabbedItem) {
+          // Draw on main canvas ('this'), no grab effect, no offset needed
+          shape.display(this, false, 0, 0);
+      }
+  }
+
 
   // --- Central White Canvas Area Drawing (Rendered to canvasPG) ---
   // This PG buffer represents the artboard content that gets saved/displayed
@@ -936,7 +1068,7 @@ function draw() {
     image(canvasPG, CANVAS_AREA_X, CANVAS_AREA_Y);
   } else {
       // Handle case where canvasPG might be null (e.g., setup error, extreme resize)
-      // console.warn("canvasPG is null, cannot draw central canvas area.");
+      // console.warn("canvasPG is null, cannot draw central canvas area."); // Keep console logs for debugging
       // Optionally draw a visual indicator of the error
        fill(255, 100, 100, 100); // Semi-transparent red box
        rect(CANVAS_AREA_X, CANVAS_AREA_Y, CANVAS_AREA_W, CANVAS_AREA_H);
@@ -990,13 +1122,186 @@ function draw() {
   textAlign(LEFT, CENTER);
   // Use baseFont for UI text if it's loaded or falls back to CSS string
    // Check if baseFont is a p5.Font object or just a string before setting.
-  if (typeof baseFont === 'object' && baseFont !== null && typeof baseFont.text === 'function') {
-      textFont(baseFont); // Set P5 font object
+   // Use textFont(baseFont) only if baseFont is truthy and has font methods, otherwise default.
+  if (baseFont && typeof textFont === 'function') { // Check if global textFont exists
+      // P5's global textFont accepts both p5.Font object and CSS string
+      textFont(baseFont);
   } else {
-      textFont('monospace'); // Fallback to CSS font name
+      // textFont is not available or baseFont is problematic, fallback
+      // P5 defaults to Arial/Helvetica if textFont is never called or fails.
+      // No explicit textFont call here, rely on P5 default or browser default.
+       // console.warn("textFont function not available or baseFont is invalid. Using default font."); // Keep console logs for debugging
   }
+
   text("PLACEHOLDER\nLOGO", 20, HEADER_HEIGHT / 2); // Position left, vertically centered in header
 }
+
+// New function to handle all positioning logic for DOM elements and canvasPG
+function positionDOMElementsAndCanvasPG() {
+     console.log("positionDOMElementsAndCanvasPG called.");
+
+    // Recalculate canvas area dimensions and position
+     // Ensure CANVAS_AREA_W is reasonable relative to window width
+     // Make it at least 300px, or 95% of window width, capped at original CANVAS_AREA_W_BASE
+     const minCanvasW = 300;
+     const adjustedCanvasW = min(CANVAS_AREA_W_BASE, max(minCanvasW, windowWidth * 0.95));
+
+
+    let targetCANVAS_AREA_W = adjustedCanvasW;
+    let targetCANVAS_AREA_H = adjustedCanvasW * (5 / 4); // Maintain 5:4 aspect ratio based on width
+
+    // Calculate X position, centering within available space. Leave margins.
+    let minSideMargin = 15; // Min margin on left/right of the canvas area
+    let targetCANVAS_AREA_X = max(minSideMargin, (width / 2 - targetCANVAS_AREA_W / 2));
+
+    // Calculate Y position below the header. Leave padding below header.
+    let padY = 20;
+    let targetCANVAS_AREA_Y = HEADER_HEIGHT + padY;
+
+     // Refine CANVAS_AREA calculations based on vertical constraints if window is too short
+     const availableH = height - HEADER_HEIGHT - padY - 15; // 15px min bottom margin
+     const requiredH_forW = targetCANVAS_AREA_W * (5/4);
+
+     if (requiredH_forW > availableH && availableH > 100) { // If portrait constraint is tighter and there's enough space
+        targetCANVAS_AREA_H = availableH; // Cap height to fit
+         // Recalculate width to maintain 5:4 ratio based on the capped height
+        targetCANVAS_AREA_W = targetCANVAS_AREA_H * (4/5);
+         // Re-clamp width bounds to ensure it doesn't become too small or too large horizontally
+        targetCANVAS_AREA_W = max(minCanvasW, min(targetCANVAS_AREA_W, windowWidth * 0.95));
+         // Recalculate X based on the new constrained width
+         targetCANVAS_AREA_X = max(minSideMargin, (width / 2 - targetCANVAS_AREA_W / 2));
+     }
+     // else: Use the width-based calculations (targetCANVAS_AREA_W, targetCANVAS_AREA_H, targetCANVAS_AREA_X)
+
+
+     // Update global CANVAS_AREA variables with the final calculated values
+     CANVAS_AREA_W = targetCANVAS_AREA_W;
+     CANVAS_AREA_H = targetCANVAS_AREA_H;
+     CANVAS_AREA_X = targetCANVAS_AREA_X;
+     CANVAS_AREA_Y = targetCANVAS_AREA_Y;
+
+
+     // --- Resize canvasPG buffer ---
+     // The canvasPG buffer must match the *final calculated* CANVAS_AREA_W and CANVAS_AREA_H.
+     // Check if its current size is different from the required size before resizing to avoid unnecessary operations.
+    if (canvasPG && (canvasPG.width !== CANVAS_AREA_W || canvasPG.height !== CANVAS_AREA_H)) {
+         console.log(`Resizing canvasPG buffer to new calculated size: ${CANVAS_AREA_W}x${CANVAS_AREA_H}`);
+         // resizeCanvas method on graphics buffer clears the buffer. It will be redrawn by the next draw() cycle.
+         if (CANVAS_AREA_W > 0 && CANVAS_AREA_H > 0) {
+              canvasPG.resizeCanvas(CANVAS_AREA_W, CANVAS_AREA_H);
+               canvasPG.background(255); // Ensure it has a background after resize
+         } else {
+              console.error("Attempted to resize canvasPG to invalid dimensions, disposing buffer.");
+               if (canvasPG) { try { canvasPG.remove(); } catch(e) {} } canvasPG = null;
+         }
+     } else if (!canvasPG && CANVAS_AREA_W > 0 && CANVAS_AREA_H > 0) {
+          // If buffer doesn't exist but dimensions are valid, create it. Should ideally happen in setup.
+          console.log("Creating canvasPG buffer in windowResized as it was null.");
+          canvasPG = createGraphics(CANVAS_AREA_W, CANVAS_AREA_H);
+          canvasPG.background(255);
+     } else {
+         // console.log("canvasPG exists and size matches, or dimensions invalid. No resize needed for canvasPG."); // Keep console logs for debugging
+          if ((!canvasPG || canvasPG.width <= 0 || canvasPG.height <= 0) && (CANVAS_AREA_W <= 0 || CANVAS_AREA_H <= 0)) {
+             console.warn("Both canvasPG buffer and target dimensions are invalid after resize. Rendering might be affected.");
+             // Attempt to clean up if an invalid buffer exists
+              if (canvasPG) { try { canvasPG.remove(); } catch(e) {} canvasPG = null; }
+          }
+     }
+
+
+     // --- Ensure textMeasurePG is initialized or re-initialized defensively ---
+     // This small buffer typically doesn't need resizing based on window size, just existence and context config.
+     if (!textMeasurePG || typeof textMeasurePG.textWidth !== 'function') { // Check existence and basic functionality
+          console.log("Recreating textMeasurePG buffer as it was null or invalid.");
+          if (textMeasurePG) { try { textMeasurePG.remove(); } catch(e) {} } // Attempt to clean up if something was there
+          try {
+               textMeasurePG = createGraphics(10, 10); // Small valid size
+               // Re-apply essential text properties
+                if (baseFont && typeof textMeasurePG.textFont === 'function') textMeasurePG.textFont(baseFont);
+                if (typeof textMeasurePG.textAlign === 'function') textMeasurePG.textAlign(CENTER, CENTER);
+          } catch(e) {
+               console.error("Failed to recreate textMeasurePG:", e);
+               textMeasurePG = null; // Ensure it's explicitly null on failure
+          }
+     }
+
+
+     // --- Position Input Element ---
+     let headerCenterY = HEADER_HEIGHT / 2;
+     if (inputElement) {
+          // Use offsetHeight, but provide a fallback if it's zero initially
+          let inputHeight = inputElement.elt.offsetHeight || 30; // Default height ~30px if not available
+          inputElement.position(CANVAS_AREA_X, headerCenterY - inputHeight / 2);
+         // inputElement width should match the CANVAS_AREA_W
+         inputElement.size(CANVAS_AREA_W);
+     }
+
+
+    // --- Position Buttons ---
+    // Helper function to get button outer width safely (including margin/padding/border by asking offsetWidth)
+     const btnOuterWidth = (btn) => { if (!btn || !btn.elt) return 0; return btn.elt.offsetWidth || 80; }; // Default width ~80px if not available
+
+    const buttonSpacing = 8; // Gap between buttons
+    const rightMargin = 15; // Margin from right edge of the window
+
+    // Get widths of all buttons - now use offsetWidth
+    let savePNGBtnW = btnOuterWidth(savePNGButton);
+    let saveHighResPNGBtnW = btnOuterWidth(saveHighResPNGButton);
+    let savePDFBtnW = btnOuterWidth(savePDFButton);
+    let clearBtnW = btnOuterWidth(clearButton);
+    let refreshBtnW = btnOuterWidth(refreshButton);
+
+    // Calculate total width required by buttons + spacing
+     let allButtons = [refreshButton, clearButton, savePNGButton, saveHighResPNGButton, savePDFButton].filter(btn => btn !== null);
+    let totalButtonWidths = allButtons.reduce((sum, btn) => sum + btnOuterWidth(btn), 0);
+    let numButtons = allButtons.length;
+     let totalSpacing = (numButtons > 1 ? (numButtons - 1) * buttonSpacing : 0);
+
+     // Calculate the starting X position for the block of buttons to be right-aligned
+     let buttonBlockStartX = width - rightMargin - (totalButtonWidths + totalSpacing);
+
+    // Add a constraint: ensure buttons don't overlap too much with the input element on a narrow screen
+     // Use inputElement's *right edge* plus some buffer as the minimum start X for buttons
+     let inputRightEdge = inputElement ? inputElement.position().x + inputElement.size().width : 0; // If no input, assumes start at 0
+     let minButtonStartX = inputRightEdge + 30; // Minimum 30px buffer between input right edge and button start
+
+     // Use the maximum of calculated position or the minimum allowed position
+     buttonBlockStartX = max(buttonBlockStartX, minButtonStartX);
+
+     // Vertical position for buttons (center vertically in the header)
+     let buttonHeight = (savePNGButton ? savePNGButton.elt.offsetHeight || 30 : HEADER_HEIGHT / 4); // Default height ~30px
+     let buttonPadY_buttons = headerCenterY - buttonHeight / 2;
+
+
+    let currentButtonX = buttonBlockStartX;
+
+    // Position buttons in desired order (adjusting currentButtonX after each): REFRESH, CLEAR, SAVE PNG, SAVE HI-RES PNG, SAVE PDF
+     // Check if button object exists before positioning
+    if (refreshButton) { refreshButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += btnOuterWidth(refreshButton) + buttonSpacing; }
+    if (clearButton) { clearButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += btnOuterWidth(clearButton) + buttonSpacing; }
+    if (savePNGButton) { savePNGButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += btnOuterWidth(savePNGButton) + buttonSpacing; }
+    if (saveHighResPNGButton) { saveHighResPNGButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += btnOuterWidth(saveHighResPNGButton) + buttonSpacing; }
+    if (savePDFButton) { savePDFButton.position(currentButtonX, buttonPadY_buttons); /* Last button */ }
+
+
+     console.log(`Finished positionDOMElementsAndCanvasPG. CANVAS_AREA: ${CANVAS_AREA_X}, ${CANVAS_AREA_Y}, ${CANVAS_AREA_W}, ${CANVAS_AREA_H}`);
+}
+
+
+// WINDOW RESIZED FUNCTION - Handles responsive layout and canvasPG resizing
+function windowResized() {
+    console.log(`Window resized event triggered: ${windowWidth}x${windowHeight}`);
+     // Only resize if dimensions are positive and different to prevent infinite loops or errors
+     if (windowWidth > 0 && windowHeight > 0 && (windowWidth !== width || windowHeight !== height)) {
+        resizeCanvas(windowWidth, windowHeight); // Resize the main p5 canvas
+         // Recalculate and reposition after main canvas resize
+         positionDOMElementsAndCanvasPG();
+     } else {
+          // console.log("Window resize reported with same or invalid dimensions, skipping canvas resize."); // Keep console logs for debugging
+         return; // Skip the rest if canvas wasn't resized or dimensions are bad
+     }
+}
+
 
 function mousePressed() {
   // Prevent default behavior that might interfere with grabbing or input focus
@@ -1027,7 +1332,7 @@ function mousePressed() {
   // --- Logic to Grab an item ---
   // Attempt to grab items. Check PLACED items first (higher z-order visually).
   // **FIX FOR ISSUE 2: Only allow grabbing PLACED items if click is inside CANVAS_AREA**
-   if (isMouseOverCanvasArea()) { // Check if click is within the central canvas artboard area
+   if (isMouseOverCanvasArea(mouseX, mouseY)) { // Check if click is within the central canvas artboard area
        // Iterate backwards through placedItems for correct z-order selection (last drawn on top)
        for (let i = placedItems.length - 1; i >= 0; i--) {
            // Item's own isMouseOver checks if click is *on the item*, relative to its position/scale/rotation
@@ -1109,7 +1414,7 @@ function mouseReleased() {
     grabbedItem.isGrabbed = false; // Unmark as grabbed state ends
 
 
-    if (isMouseOverCanvasArea()) { // Dropped over canvas area
+    if (isMouseOverCanvasArea(grabbedItem.x, grabbedItem.y)) { // Check grabbed item's final position against canvas area
       // Dropped on artboard -> solidify and place
 
       // If it's a text item, update content from input *on drop*
@@ -1123,6 +1428,10 @@ function mouseReleased() {
                shapes = shapes.filter(s => s !== grabbedItem); // Remove from shapes
                grabbedItem = null; // Clear grabbed item reference
                // Input handling happens below regardless
+               // Reset input field state if item was discarded
+                inputElement.value('');
+                inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+                inputElement.elt.blur();
                return; // Exit early, item is discarded
            } else {
               grabbedItem.content = content; // Update content from input
@@ -1159,7 +1468,10 @@ function mouseReleased() {
                   // The item is currently in the 'shapes' array. Filter it out.
                   shapes = shapes.filter(s => s !== grabbedItem);
                   grabbedItem = null; // Clear grabbed item reference
-                  // Input handling happens below regardless
+                   // Reset input field state if item was discarded
+                   inputElement.value('');
+                   inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+                   inputElement.elt.blur();
                  return; // Exit early, item is discarded
              } else {
                   grabbedItem.content = content; // Update content from input
@@ -1185,9 +1497,12 @@ function mouseReleased() {
 
     // Actions common to both drop locations (unless item was discarded and returned early)
     // Clear grabbed item reference and reset input field state
-    // This section is only reached if grabbedItem was NOT discarded.
+    // This section is only reached if grabbedItem was NOT discarded in the conditional blocks above.
     if (grabbedItem !== null) { // Ensure grabbedItem is still valid before nulling/clearing input
          grabbedItem = null; // Clear grabbed item reference
+         // Input field is cleared *unless* the discarded logic already cleared it.
+         // Let's ensure it's cleared here only if it wasn't discarded already.
+         // Redundant calls to clear are harmless.
          inputElement.value(''); // Clear input field
          inputElement.attribute('placeholder', TEXT_OPTIONS[0]); // Reset placeholder
          inputElement.elt.blur(); // Ensure input field loses focus when drag ends
@@ -1202,7 +1517,7 @@ function doubleClicked() {
      // return false; // Careful, might affect input field
 
      // Only process double-clicks over the central canvas area
-    if (!isMouseOverCanvasArea()) return true; // Allow default behavior if outside canvas area
+    if (!isMouseOverCanvasArea(mouseX, mouseY)) return true; // Allow default behavior if outside canvas area
 
      // Iterate through placed items backwards to find the topmost item double-clicked
     for (let i = placedItems.length - 1; i >= 0; i--) {
@@ -1233,16 +1548,18 @@ function doubleClicked() {
 
 function mouseWheel(event) {
    // Prevent page scroll when interacting over relevant sketch area (anything below header)
-   let isOverInteractiveArea = mouseY >= HEADER_HEIGHT; // More forgiving: any sketch area below header
+   // Let's make this more precise: only prevent default scroll if over the canvas area OR if an item is grabbed anywhere.
+   let isOverCanvasArea = isMouseOverCanvasArea(mouseX, mouseY);
 
-
-    if (grabbedItem && isOverInteractiveArea) {
-        // Rotate grabbed item by scrolling wheel
-        grabbedItem.rotation += event.delta * 0.002; // Smaller increment
-        return false; // Prevent default browser scroll
+    if (grabbedItem || isOverCanvasArea) { // If item grabbed OR mouse is over canvas area
+        // Rotate grabbed item by scrolling wheel IF item is grabbed
+         if (grabbedItem) {
+            grabbedItem.rotation += event.delta * 0.002; // Smaller increment
+         }
+        // Prevent default browser scroll if over canvas area or grabbing
+        return false;
     }
-    // Allow scrolling outside the main interactive area or if nothing is grabbed
-    // Clicking on buttons/input then scrolling is expected to scroll the page if content exists
+    // Allow scrolling outside the main interactive area and if nothing is grabbed
     return true; // Allow default browser scroll elsewhere
 }
 
@@ -1250,16 +1567,22 @@ function keyPressed() {
     // Check if the input field or any other HTML element has focus
     // This prevents key presses (like DELETE or + / -) from affecting sketch items
     // when the user is actively typing in the input field.
-    if (document.activeElement !== document.body && document.activeElement !== canvas.elt) {
-        // console.log("Key pressed while input or other element is focused. Ignoring sketch shortcut.");
-        // Check specifically if it's the input element, if so, always allow typing
-        if (document.activeElement === inputElement.elt) return true;
-        // If another element (button?), maybe allow defaults? Depends on needs.
-        return true; // Allow default action if a specific non-canvas element is focused
+    // If input field is focused, return true immediately to allow typing.
+    if (document.activeElement === inputElement.elt) {
+        // Allow all keys while input is focused
+        return true;
+    }
+
+    // Check if any other DOM element *except* the p5 canvas has focus.
+    // If something *else* is focused, we probably don't want sketch shortcuts to fire.
+     if (document.activeElement !== document.body && document.activeElement !== canvas.elt) {
+        // Another non-canvas DOM element is focused (e.g., a button, though less likely for keypress).
+        // Allow default behavior for these elements.
+        return true;
     }
 
 
-    // Delete grabbed item with DELETE or BACKSPACE IF nothing in sketch is focused other than canvas
+    // Delete grabbed item with DELETE or BACKSPACE IF nothing in sketch is focused other than canvas/body
     if (grabbedItem && (keyCode === DELETE || keyCode === BACKSPACE)) {
         console.log("Deleting grabbed item.");
         // Remove from wherever it might be (should only be in shapes or placedItems, but defensive)
@@ -1270,13 +1593,13 @@ function keyPressed() {
         // Reset input field state when deleted, focus it
         inputElement.value('');
         inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-        inputElement.elt.focus(); // Set focus to input field after deleting
+        // inputElement.elt.focus(); // Removed auto-focus on delete to avoid interrupting flow if user intends something else
 
         return false; // Prevent default key action (like browser navigation/history back for backspace)
     }
 
-    // Scale grabbed item with + / = or - IF nothing in sketch is focused other than canvas
-     if (grabbedItem) { // Checked focused state above already
+    // Scale grabbed item with + / = or - IF nothing in sketch is focused other than canvas/body
+     if (grabbedItem) { // Focused state checked above
           // Limit scaling to prevent shapes from becoming infinitely large/small
           const scaleIncrement = 1.08; // Scale up by 8%
           const scaleDecrement = 1 / scaleIncrement; // Scale down by reciprocal for consistency
@@ -1306,24 +1629,69 @@ function keyPressed() {
 }
 
 
+// Corrected addNewTextShapeFromInput function
 function addNewTextShapeFromInput() {
     let currentText = inputElement.value();
-    // Only add text if input has content and it's not just the placeholder
-    if (!currentText || currentText.trim() === "" || currentText.trim() === TEXT_OPTIONS[0].trim()) {
-         console.log("Input empty/placeholder, not adding text.");
-         // Add a temporary visual cue to the input field
-         inputElement.style("border-color", "red"); // Change border to red
-         setTimeout(() => inputElement.style("border-color", "#ccc"), 500); // Revert after 500ms
-         inputElement.value(''); // Ensure input is cleared if it was just placeholder+space
-         inputElement.attribute('placeholder', TEXT_OPTIONS[0]); // Reset placeholder
-         inputElement.elt.focus(); // Keep focus on input
-         return; // Exit function early
+    // ... (existing code for checking input, creating newTextShape,
+    // setting type, content, shapeType, size, scaleFactor, textScaleAdjust, color) ...
+
+    // --- Assign a random loaded font ---
+    // Create an array of ALL your loaded font variables.
+    const potentialFonts = [
+        fontBangersRegular,
+        fontBoogalooRegular,
+        fontBreeSerifRegular,
+        fontCaveatBrushRegular,
+        fontCherryBombOneRegular,
+        fontCinzelDecorativeBlack,
+        fontCinzelDecorativeBold,
+        fontCinzelDecorativeRegular,
+        fontDynaPuffBold,
+        fontDynaPuffMedium,
+        fontDynaPuffRegular,
+        fontInterBold,
+        fontInterRegular,
+        fontPixelifySansRegular,
+        fontSenBold,
+        fontSenMedium,
+        fontSenRegular,
+        fontShareTechMonoRegular,
+        fontVT323Regular
+        // Make sure every font variable is listed here!
+    ];
+
+    // Filter out any variables that didn't load correctly (will be null, undefined, or 'monospace' string)
+    // We want to pick only from the actual p5.Font objects that loaded successfully.
+    const usableFonts = potentialFonts.filter(f => f && typeof f.text === 'function'); // Checks if variable holds a valid p5.Font object
+
+    // If there are usable loaded fonts, pick one randomly. Otherwise, fall back to the default baseFont string.
+    if (usableFonts.length > 0) {
+        newTextShape.font = random(usableFonts); // Assign a random p5.Font object from the loaded ones
+         console.log("Assigned random loaded font to new text shape:", newTextShape.font.font); // Log the font name/style if available
+    } else {
+        newTextShape.font = baseFont; // Fallback (will be 'monospace' string)
+         console.warn("No custom fonts loaded successfully for new text shape. Using baseFont fallback:", newTextShape.font);
     }
+    // --- End font assignment ---
+
+
+    // ... (rest of the spawning location, speed, rotation logic) ...
+    // Ensure floating state etc is set (newTextShape.isGrabbed = false; etc.)
+
+    shapes.push(newTextShape); // Add to floating shapes array
+
+    // ... (rest of the input clearing and focusing logic) ...
+    inputElement.value('');
+    inputElement.attribute('placeholder', TEXT_OPTIONS[0]); // Reset placeholder
+    inputElement.elt.focus(); // Keep focus for quick entry of next text
+}
 
     console.log("Adding new text shape:", currentText.trim());
 
     let newTextShape = new FloatingShape();
-    newTextShape.reset(); // Start with default floating properties
+    // Do NOT call newTextShape.reset() here first if we are immediately overriding its spawn properties.
+    // Reset sets default off-screen properties and speeds. We'll set them below.
+
     newTextShape.type = 'text';
     newTextShape.content = currentText.trim(); // Use the trimmed text from the input
     newTextShape.shapeType = 'none'; // Text items have no shape primitive (aside from text itself)
@@ -1363,48 +1731,87 @@ function addNewTextShapeFromInput() {
      newTextShape.color = pickedColor;
 
 
-     // --- FIXED SPAWN LOCATION (ISSUE 1) ---
-     // Spawn location: Randomly to the left or right of the artboard within visible window bounds
-     let spawnSide = random() > 0.5 ? 'right' : 'left'; // Choose left or right randomly
+     // --- Custom SPAWN LOCATION for new text (near artboard sides) ---
      let spawnMargin = 40; // Minimum distance from window or artboard edges
+     let spawnedSuccessfully = false; // Flag to track if we found a good spawn spot
 
-     if (spawnSide === 'left') {
-         // Spawn left of canvas area, X between spawnMargin and CANVAS_AREA_X - spawnMargin
+     // Calculate available horizontal space outside the artboard
+     let leftSpace = CANVAS_AREA_X;
+     let rightSpace = width - (CANVAS_AREA_X + CANVAS_AREA_W);
+
+     // Prefer spawning on the side with more space, but pick randomly if space is similar
+     let spawnSide;
+     if (leftSpace > rightSpace * 1.5) { // Significantly more space on left
+         spawnSide = 'left';
+     } else if (rightSpace > leftSpace * 1.5) { // Significantly more space on right
+         spawnSide = 'right';
+     } else { // Space is somewhat balanced, pick randomly
+         spawnSide = random() > 0.5 ? 'right' : 'left';
+     }
+
+
+     if (spawnSide === 'left' && leftSpace > spawnMargin * 2) {
+         // Spawn left of canvas area if there's enough space
          newTextShape.x = random(spawnMargin, CANVAS_AREA_X - spawnMargin);
          newTextShape.speedX = random(0.5, 1.5); // Float towards the right (away from edge)
-     } else { // right
-         // Spawn right of canvas area, X between CANVAS_AREA_X + CANVAS_AREA_W + spawnMargin and width - spawnMargin
+         spawnedSuccessfully = true;
+     } else if (rightSpace > spawnMargin * 2) {
+         // If left side failed (or was not chosen due to less space), try spawning right
          newTextShape.x = random(CANVAS_AREA_X + CANVAS_AREA_W + spawnMargin, width - spawnMargin);
          newTextShape.speedX = random(-1.5, -0.5); // Float towards the left (away from edge)
+         spawnedSuccessfully = true;
      }
-     // Y position: Randomly within the vertical bounds of the canvas area + margins
-     newTextShape.y = random(CANVAS_AREA_Y - spawnMargin, CANVAS_AREA_Y + CANVAS_AREA_H + spawnMargin);
-      // Ensure initial Y is not in the header
-     newTextShape.y = max(newTextShape.y, HEADER_HEIGHT + spawnMargin);
 
+     if (spawnedSuccessfully) {
+          console.log(`Adding new text shape: Spawning near artboard (${spawnSide} side).`);
+          // Set Y position and gentle vertical speed for items spawned near artboard sides
+          newTextShape.y = random(CANVAS_AREA_Y - spawnMargin, CANVAS_AREA_Y + CANVAS_AREA_H + spawnMargin);
+           // Ensure initial Y is not in the header
+          newTextShape.y = max(newTextShape.y, HEADER_HEIGHT + spawnMargin);
+           // Clamp Y to window bounds + margin if needed (prevents spawning *way* off top/bottom)
+           newTextShape.y = max(spawnMargin, min(newTextShape.y, height - spawnMargin));
 
-     // Assign other floating properties - keep them gentle
-     newTextShape.speedY = random(-0.5, 0.5); // Allow slight up/down movement
-     newTextShape.rotation = random(TWO_PI); // Initial random rotation
-     newTextShape.rotationSpeed = random(-0.001, 0.001); // Very slow random rotation
+          newTextShape.speedY = random(-0.5, 0.5); // Allow slight up/down movement
+          newTextShape.rotation = random(TWO_PI); // Initial random rotation
+          newTextShape.rotationSpeed = random(-0.001, 0.001); // Very slow random rotation
 
-     // Ensure item state starts as floating
-     newTextShape.isGrabbed = false;
-     newTextShape.isPlacing = false;
+     } else {
+          // Fallback: Side areas were too small or zero space, use the standard off-screen spawn logic from FloatingShape's reset().
+          // We need to explicitly call reset() here to get the default off-screen position and speeds.
+           console.log("Adding new text shape: Side areas too small or zero space, falling back to off-screen spawn via reset().");
+          newTextShape.reset(); // This sets x, y, speedX, speedY, rotation, rotationSpeed
+           // Override properties specific to TextShape that reset() might default (like shapeType etc) if reset() ever changes significantly
+           newTextShape.type = 'text';
+           newTextShape.content = currentText.trim();
+           newTextShape.shapeType = 'none';
+            newTextShape.textScaleAdjust = category.textScaleAdjust; // Ensure text scale is set
+            newTextShape.font = baseFont; // Ensure font is set
+            newTextShape.color = pickedColor; // Ensure color is set
+           // isGrabbed and isPlacing should be false after reset()
+     }
 
+    // Ensure floating state regardless of spawn method
+    newTextShape.isGrabbed = false;
+    newTextShape.isPlacing = false;
+     // landFrame and tempScaleEffect are default values after constructor
 
     shapes.push(newTextShape); // Add to floating shapes array
 
-    inputElement.value(''); // Clear input field after adding text
+    // Clear input field after adding text
+    inputElement.value('');
     inputElement.attribute('placeholder', TEXT_OPTIONS[0]); // Reset placeholder
     inputElement.elt.focus(); // Keep focus for quick entry of next text
 }
 
 // Checks if the mouse is within the boundaries of the central canvas artboard area
-function isMouseOverCanvasArea() {
-     // Check bounds inclusive of edges for a slight tolerance effect or exact edge hit
-    return mouseX >= CANVAS_AREA_X && mouseX <= CANVAS_AREA_X + CANVAS_AREA_W &&
-           mouseY >= CANVAS_AREA_Y && mouseY <= CANVAS_AREA_Y + CANVAS_AREA_H;
+// pX, pY are coordinates to check against
+function isMouseOverCanvasArea(pX, pY) {
+     // Use coordinates passed, default to mouseX/Y if none provided
+     const checkX = pX === undefined ? mouseX : pX;
+     const checkY = pY === undefined ? mouseY : pY;
+
+    return checkX >= CANVAS_AREA_X && checkX <= CANVAS_AREA_X + CANVAS_AREA_W &&
+           checkY >= CANVAS_AREA_Y && checkY <= CANVAS_AREA_Y + CANVAS_AREA_H;
 }
 
 // Snaps a given angle (radians) to the nearest increment
@@ -1455,18 +1862,20 @@ function saveCanvasAreaAsPNG() {
 
     console.log("Saving Standard PNG...");
     // Save the temporary buffer
+    // Use saveCanvas provided by p5.js
     saveCanvas(saveBuffer, 'myArtboard_stdres_' + generateTimestampString() + '.png');
      console.log("Standard PNG save initiated.");
 
      // Dispose of the temporary buffer
+    // saveBuffer.remove() is the correct way to dispose createGraphics buffers in p5.js
     if (saveBuffer) { saveBuffer.remove(); } // Dispose the p5.Graphics element
 }
 
 
 // SAVE HIGH-RESOLUTION PNG function (New function for print output)
-// Currently targets B2 @ 300 DPI. Will be updated later to be relative to CANVAS_AREA_W/H * 10 scale.
+// Currently targets B2 @ 300 DPI scaled proportionally from CANVAS_AREA_W_BASE (500px)
 function saveCanvasAreaAsHighResPNG() {
-    console.log("SAVE HIGH-RES PNG button pressed (B2 @ 300 DPI target or Scaled)");
+    console.log("SAVE HIGH-RES PNG button pressed (B2 @ 300 DPI target scaling from base 500px width)");
 
      if (!canvasPG || canvasPG.width <= 0 || canvasPG.height <= 0) {
         console.warn("Cannot generate high-res PNG: canvasPG not created or has zero dimensions.");
@@ -1474,40 +1883,28 @@ function saveCanvasAreaAsHighResPNG() {
         return;
      }
 
-    // === Current High-Res Logic (Targets fixed B2 size scaled) ===
-    // Source dimensions are your displayed artboard dimensions (canvasPG size)
-    const sourceWidth = canvasPG.width;
-    const sourceHeight = canvasPG.height;
+    // === High-Res Logic ===
+    // Source dimensions are based on the fixed base artboard width (500px) at the 5:4 ratio
+    const sourceWidthBase = CANVAS_AREA_W_BASE;
+    const sourceHeightBase = CANVAS_AREA_W_BASE * (5/4); // 625px
 
-    // Desired high-res output dimensions
-     // OPTION 1 (Current): Fixed print target (like B2) at 300 DPI. Your current implementation does this relative to B2 aspect ratio.
-     // This doesn't *strictly* save the canvas content, but renders the *items* positioned/scaled for B2 output.
+    // Target print dimensions (B2 @ 300 DPI)
     const TARGET_DPI = 300; // Standard print resolution
-    const B2_WIDTH_MM = 500; // B2 paper dimensions in mm
-    const B2_HEIGHT_MM = 707;
-    const MM_PER_INCH = 25.4;
-     const actualTargetWidth = round((B2_WIDTH_MM / MM_PER_INCH) * TARGET_DPI); // approx 5906
-    const actualTargetHeight = round((B2_HEIGHT_MM / MM_PER_INCH) * TARGET_DPI); // approx 8350 or 8351
+    const B2_WIDTH_INCHES = 500 / 25.4; // B2 paper dimensions in inches (approx 19.685)
+    const B2_HEIGHT_INCHES = 707 / 25.4; // (approx 27.83)
 
-    // OPTION 2 (Future request): Scale relative to current artboard size, e.g., 10x
-    // const actualTargetWidth = round(sourceWidth * 10);
-    // const actualTargetHeight = round(sourceHeight * 10);
-     // If choosing Option 2, the verticalOffset below is zero if centering isn't desired within a larger format
+    const targetWidthPixels = round(B2_WIDTH_INCHES * TARGET_DPI); // approx 5906
+    const targetHeightPixels = round(B2_HEIGHT_INCHES * TARGET_DPI); // approx 8350 or 8351
 
+     // Calculate scale factor needed to scale the *base* artboard dimensions (500x625) up to the *target* B2 width.
+     // This scale factor is applied to all drawing operations.
+     const scaleFactor = targetWidthPixels / sourceWidthBase;
 
-    // For saving purposes, use the exact target sizes derived from the B2 calculation (or future 10x)
-    let targetWidthPixels = 5906; // B2 W at 300dpi rounded
-    let targetHeightPixels = 8350; // B2 H at 300dpi rounded
+     // Calculate the height of the *base* source content (625px) when scaled by this factor
+     const scaledSourceHeight = sourceHeightBase * scaleFactor; // 625 * scaleFactor
 
-     // Calculate scale factor based on scaling source width to target width
-     const scaleFactor = targetWidthPixels / sourceWidth;
-
-     // Calculate the height of the source content when scaled to target width
-     const scaledSourceHeight = sourceHeight * scaleFactor;
-
-     // Calculate vertical offset to center the scaled source content within the target canvas height
-     // This only applies if the target height aspect ratio doesn't match the source height aspect ratio after scaling the width.
-     // Your 5:4 artboard (source) doesn't match B2 aspect ratio (approx 1:1.414). So need centering.
+     // Calculate vertical offset to center the scaled source content (which has the original 5:4 aspect ratio)
+     // within the potentially different aspect ratio of the target B2 paper (approx 1:1.414).
      const verticalOffset = (targetHeightPixels - scaledSourceHeight) / 2;
 
 
@@ -1528,13 +1925,12 @@ function saveCanvasAreaAsHighResPNG() {
         // The items' coordinates (item.x, item.y) are relative to the *main sketch window*.
         // The artboard is located at (CANVAS_AREA_X, CANVAS_AREA_Y) in the main sketch.
         // An item at (item.x, item.y) is located at (item.x - CANVAS_AREA_X, item.y - CANVAS_AREA_Y) *relative to the artboard's top-left corner*.
-        // To draw it correctly on the high-res buffer (whose origin is its own top-left, analogous to artboard's origin):
-        // 1. Start at the drawing origin (0,0) of highResPG.
-        // 2. Translate to where the scaled item center should be. This is (item.x - CANVAS_AREA_X) scaled by scaleFactor horizontally,
-        //    and (item.y - CANVAS_AREA_Y) scaled by scaleFactor vertically, PLUS the vertical offset for centering.
-        // 3. Apply item's rotation.
-        // 4. Apply the combined scale: item's scaleFactor * overall high-res scaleFactor.
-        // 5. Draw the primitive shape at (0,0) in this scaled context.
+        // The high-res buffer represents the artboard area scaled up. Its origin (0,0) corresponds to the top-left of the scaled artboard.
+        // The scaled artboard area starts at Y = verticalOffset on the highResPG.
+        // An item at (item.x - CANVAS_AREA_X, item.y - CANVAS_AREA_Y) relative to the artboard origin
+        // needs to be drawn at ( (item.x - CANVAS_AREA_X) * scaleFactor, (item.y - CANVAS_AREA_Y) * scaleFactor + verticalOffset )
+        // on the highResPG.
+
 
         console.log(`Drawing ${placedItems.length} placed items onto high-res buffer...`);
         for (let i = 0; i < placedItems.length; i++) {
@@ -1621,6 +2017,7 @@ function saveCanvasAreaAsHighResPNG() {
          // Save the high-resolution buffer as a PNG file
          // Add a check for valid dimensions before saving
         if (targetWidthPixels > 0 && targetHeightPixels > 0) {
+             // Use saveCanvas provided by p5.js
              saveCanvas(highResPG, `myArtboard_HIRES_${targetWidthPixels}x${targetHeightPixels}_` + generateTimestampString() + '.png');
              console.log("High-res PNG save initiated.");
          } else {
@@ -1648,9 +2045,11 @@ function saveCanvasAreaAsPDF() {
     console.log("SAVE PDF button pressed (using zenoZeng's p5.pdf)");
 
     // Check if the p5.pdf library and its methods are available
+    // Assume p5.pdf attaches createPDF to p5.Graphics or p5 object itself.
+    // Check for existence before calling.
     if (typeof p5 === 'undefined' || !p5.prototype.createPDF || typeof p5.prototype.createPDF !== 'function') {
          console.error("p5.pdf library not loaded or not providing createPDF method. Check index.html script includes and load order.");
-         alert("Error: PDF library not loaded or initialized correctly.");
+         alert("Error: PDF library not loaded or initialized correctly. Please ensure 'p5.pdf.js' is included AFTER 'p5.js'.");
          return;
      }
 
@@ -1659,14 +2058,16 @@ function saveCanvasAreaAsPDF() {
      try {
          // Create a p5.PDF instance linked to the current sketch instance 'this'.
          // Ensure it's called on the p5.prototype for reliable access depending on P5 mode.
+         // It might also be available as p5.createPDF(this) or this.createPDF().
+         // Try prototype first as recommended by some sources.
          pdf = p5.prototype.createPDF(this); // Passing 'this' (the sketch instance)
 
         if (!pdf || typeof pdf.beginRecord !== 'function' || typeof pdf.endRecord !== 'function' || typeof pdf.save !== 'function') {
-            console.error("p5.PDF instance created, but key methods (beginRecord, etc.) are missing. Check p5.pdf.js integrity.");
+            console.error("p5.PDF instance created, but key methods (beginRecord, endRecord, save) are missing. Check p5.pdf.js integrity or version.");
              // Dispose potential partial object
-             if (pdf && typeof pdf.remove === 'function') { try { pdf.remove(); } catch(e) {} }
+             if (pdf && typeof pdf.remove === 'function') { try { pdf.remove(); } catch(e) { console.error("Error disposing partial PDF object:", e); } }
              pdf = null; // Ensure pdf is null to avoid finally block errors
-             alert("Error creating PDF instance.");
+             alert("Error creating PDF instance. PDF library might be corrupted or incompatible.");
             return;
         }
         console.log("p5.PDF instance created. Starting record.");
@@ -1740,6 +2141,11 @@ function saveCanvasAreaAsPDF() {
              let itemTextScale = isNaN(item.textScaleAdjust) ? 0.2 : item.textScaleAdjust;
              itemTextScale = max(itemTextScale, 1e-3); // Ensure minimum text scale adjust
 
+            // Use the global textFont if itemFont is a p5.Font object, otherwise rely on CSS string default
+             if (itemFont && typeof textFont === 'function') {
+                 textFont(itemFont);
+             }
+
 
             item.drawShapePrimitive(this, 0, 0, item.size, item.shapeType, item.type === 'text', itemTextScale);
              // NOTE: drawShapePrimitive calls methods like graphics.rect(). When called with 'this', it calls global p5 functions.
@@ -1803,6 +2209,7 @@ function resetRandom() {
     console.log("REFRESH button pressed");
     // Temporarily store the grabbed item if it's floating, so it's not lost
     let tempGrabbedItem = grabbedItem;
+    // Check if grabbed item is currently in the shapes array (meaning it was floating or new text before grab)
     let wasFloating = tempGrabbedItem && shapes.includes(tempGrabbedItem);
 
     if (wasFloating) {
@@ -1860,188 +2267,6 @@ function restartAll() {
     console.log(`State cleared and repopulated with new floating shapes. Total shapes: ${shapes.length}`);
 }
 
-// WINDOW RESIZED FUNCTION - Handles responsive layout and canvasPG resizing
-function windowResized() {
-    console.log(`Window resized to: ${windowWidth}x${windowHeight}`);
-     // Only resize if dimensions are positive and different to prevent infinite loops or errors
-     if (windowWidth > 0 && windowHeight > 0 && (windowWidth !== width || windowHeight !== height)) {
-        resizeCanvas(windowWidth, windowHeight); // Resize the main p5 canvas
-     } else {
-          // console.log("Window resize reported with same or invalid dimensions, skipping canvas resize.");
-         return; // Skip the rest if canvas wasn't resized or dimensions are bad
-     }
-
-
-     // Recalculate canvas area dimensions and position
-     // Ensure CANVAS_AREA_W is reasonable relative to window width
-     // Make it at least 300px, or 95% of window width, capped at original CANVAS_AREA_W
-     const minCanvasW = 300;
-     const adjustedCanvasW = min(CANVAS_AREA_W, max(minCanvasW, windowWidth * 0.95));
-
-
-    CANVAS_AREA_H = adjustedCanvasW * (5 / 4); // Maintain 5:4 aspect ratio
-
-    // Calculate X position, centering within available space. Leave margins.
-    let minSideMargin = 15; // Min margin on left/right of the canvas area
-    CANVAS_AREA_X = max(minSideMargin, (width / 2 - adjustedCanvasW / 2));
-
-    // Calculate Y position below the header. Leave padding below header.
-    let padY = 20;
-    CANVAS_AREA_Y = HEADER_HEIGHT + padY;
-
-     // Ensure canvas area fits vertically below header and has some bottom room if needed
-     let minBottomMargin = 15;
-      if (CANVAS_AREA_Y + CANVAS_AREA_H + minBottomMargin > height) {
-           // If canvas area exceeds window height (including margins), clamp its size or position
-           // Prioritize showing the top part if space is very constrained
-           CANVAS_AREA_H = height - CANVAS_AREA_Y - minBottomMargin; // Reduce height to fit
-            if (CANVAS_AREA_H < adjustedCanvasW * (0.5)) { // If it's gotten extremely squashed, cap min aspect ratio?
-                // This might break the 5:4 aspect ratio. Alternative: Make CANVAS_AREA_Y dynamic?
-                // For simplicity V1, let the height calculation based on width win, but maybe warn if too large.
-                if (CANVAS_AREA_H < 100) console.warn(`Calculated CANVAS_AREA_H is very small (${CANVAS_AREA_H}). Window is too short.`);
-             }
-          CANVAS_AREA_W = CANVAS_AREA_H * (4/5); // Adjust width based on squashed height to keep 5:4 (This part conflicts with width lock, need a choice!)
-          // Let's revert: Maintain width and calculated height. Let bottom content be off-screen if needed, focus on layout relative to top header.
-          CANVAS_AREA_W = adjustedCanvasW; // Stick to the calculated width first
-           // CANVAS_AREA_H will be the target calculated from width * 5/4
-           // If (CANVAS_AREA_Y + CANVAS_AREA_H + minBottomMargin) is still > height, then some of the artboard will be below the fold.
-           // This is often acceptable; the user can scroll the page if enabled, or live with it in this simple tool.
-           // If we want *the entire artboard* to always be visible, we need to scale down the artboard size calculation itself based on vertical constraints.
-           // For V1: Maintain aspect ratio, center horizontally, place below header vertically. Allow clipping at bottom if window very short.
-            // Re-calculating based on *fitting* the height if height becomes the limiting factor:
-             const maxAllowableHeight = height - HEADER_HEIGHT - padY - minBottomMargin;
-             if (CANVAS_AREA_H > maxAllowableHeight && maxAllowableHeight > 100) { // Only adjust if constraint active and space is positive
-                CANVAS_AREA_H = maxAllowableHeight; // Cap height
-                CANVAS_AREA_W = CANVAS_AREA_H * (4/5); // Recalculate width to maintain 5:4 ratio based on capped height
-                 CANVAS_AREA_W = max(minCanvasW, min(CANVAS_AREA_W, windowWidth * 0.95)); // Also clamp width just in case?
-                 // This iterative adjustment can be complex. A single calculation choosing based on minimum scale is cleaner:
-                  // Let effective max W = windowWidth * 0.95, effective max H = height - HEADER_HEIGHT - padY - minBottomMargin.
-                  // Required W for ratio = currentH * 4/5, Required H for ratio = currentW * 5/4.
-                  // Scale = min(effectiveMaxW / OriginalFixedCanvasW, effectiveMaxH / (OriginalFixedCanvasW * 5/4)). Apply this scale to original 500x625.
-                  // V1 Simpler:
-                   const idealH_forW = adjustedCanvasW * (5/4);
-                   const availableH = height - HEADER_HEIGHT - padY - minBottomMargin;
-                   if (idealH_forW > availableH && availableH > 100) { // If portrait constraint is tighter
-                        CANVAS_AREA_H = availableH;
-                         CANVAS_AREA_W = CANVAS_AREA_H * (4/5); // Let height define width if necessary to fit
-                         CANVAS_AREA_W = max(minCanvasW, min(CANVAS_AREA_W, windowWidth * 0.95)); // Re-clamp width bounds
-                          CANVAS_AREA_X = max(minSideMargin, (width / 2 - CANVAS_AREA_W / 2)); // Recalculate X based on new W
-                   } else {
-                        CANVAS_AREA_H = idealH_forW; // Stick to width-based H
-                         // CANVAS_AREA_W was already set as adjustedCanvasW
-                          CANVAS_AREA_X = max(minSideMargin, (width / 2 - CANVAS_AREA_W / 2)); // Keep original X calc
-                   }
-              } // End refined CANVAS_AREA calculations
-
-    let headerCenterY = HEADER_HEIGHT / 2; // Vertical center for header elements
-
-    // Input Element Positioning & Sizing - Relative to updated CANVAS_AREA_X and width
-    if (inputElement) {
-        inputElement.position(CANVAS_AREA_X, headerCenterY - inputElement.height/2 - 2); // Vertically align
-        // Use total width of canvas area + left margin as available input width? No, just match artboard width is cleaner.
-        inputElement.size(CANVAS_AREA_W); // Keep input width aligned with artboard width
-         // Add margin/padding calculation explicitly
-         inputElement.style("padding", "5px 10px");
-         inputElement.style("box-sizing", "border-box");
-         // Recalculate height including padding: offset - (element height / 2) - slight correction
-         // Let's just position using Y calculated, height determined by padding+font size via CSS
-         inputElement.position(CANVAS_AREA_X, headerCenterY - inputElement.elt.offsetHeight / 2); // Position vertically in header area centered
-    }
-
-
-    // Helper function to get button outer width safely (including margin/padding/border by asking clientWidth)
-     const btnOuterWidth = (btn) => { if (!btn || !btn.elt) return 0; return btn.elt.offsetWidth; };
-
-    // Button positioning for the right-aligned group in header
-    let buttonSpacing = 8; // Gap between buttons
-    let rightMargin = 15; // Margin from right edge of the window
-
-    // Get widths of all buttons - now use clientWidth/offsetWidth
-    let savePNGBtnW = btnOuterWidth(savePNGButton);
-    let saveHighResPNGBtnW = btnOuterWidth(saveHighResPNGButton);
-    let savePDFBtnW = btnOuterWidth(savePDFButton);
-    let clearBtnW = btnOuterWidth(clearButton);
-    let refreshBtnW = btnOuterWidth(refreshButton);
-
-    // Calculate total width required by buttons + spacing
-     let allButtons = [refreshButton, clearButton, savePNGButton, saveHighResPNGButton, savePDFButton].filter(btn => btn !== null);
-    let totalButtonWidths = allButtons.reduce((sum, btn) => sum + btnOuterWidth(btn), 0);
-    let numButtons = allButtons.length;
-     let totalSpacing = (numButtons > 1 ? (numButtons - 1) * buttonSpacing : 0);
-
-     // Calculate the starting X position for the block of buttons to be right-aligned
-     let buttonBlockStartX = width - rightMargin - (totalButtonWidths + totalSpacing);
-
-    // Add a constraint: ensure buttons don't overlap too much with the input element on a narrow screen
-     // Use inputElement's *right edge* plus some buffer as the minimum start X for buttons
-     let inputRightEdge = inputElement ? inputElement.position().x + inputElement.size().width : 0; // If no input, assumes start at 0
-     let minButtonStartX = inputRightEdge + 30; // Minimum 30px buffer between input right edge and button start
-
-     // Use the maximum of calculated position or the minimum allowed position
-     buttonBlockStartX = max(buttonBlockStartX, minButtonStartX);
-
-     // Vertical position for buttons (center vertically in the header)
-     let buttonPadY_buttons = headerCenterY - (savePNGButton ? savePNGButton.elt.offsetHeight / 2 : HEADER_HEIGHT / 4); // Use height of a button to center
-
-
-    let currentButtonX = buttonBlockStartX;
-
-    // Position buttons in desired order (adjusting currentButtonX after each): REFRESH, CLEAR, SAVE PNG, SAVE HI-RES PNG, SAVE PDF
-     // Check if button object exists before positioning
-    if (refreshButton) { refreshButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += refreshBtnW + buttonSpacing; }
-    if (clearButton) { clearButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += clearBtnW + buttonSpacing; }
-    if (savePNGButton) { savePNGButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += savePNGBtnW + buttonSpacing; }
-    if (saveHighResPNGButton) { saveHighResPNGButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += saveHighResPNGBtnW + buttonSpacing; }
-    if (savePDFButton) { savePDFButton.position(currentButtonX, buttonPadY_buttons); /* Last button */ }
-
-
-     // --- Resize canvasPG buffer ---
-     // The canvasPG buffer must match the *final calculated* CANVAS_AREA_W and CANVAS_AREA_H.
-     // Check if its current size is different from the required size before resizing to avoid unnecessary operations.
-    if (canvasPG && (canvasPG.width !== CANVAS_AREA_W || canvasPG.height !== CANVAS_AREA_H)) {
-         console.log(`Resizing canvasPG buffer to new calculated size: ${CANVAS_AREA_W}x${CANVAS_AREA_H}`);
-         // resizeCanvas method on graphics buffer clears the buffer. It will be redrawn by the next draw() cycle.
-         if (CANVAS_AREA_W > 0 && CANVAS_AREA_H > 0) {
-              canvasPG.resizeCanvas(CANVAS_AREA_W, CANVAS_AREA_H);
-               canvasPG.background(255); // Ensure it has a background after resize
-         } else {
-              console.error("Attempted to resize canvasPG to invalid dimensions, disposing buffer.");
-               if (canvasPG) canvasPG.remove(); canvasPG = null;
-         }
-     } else if (!canvasPG && CANVAS_AREA_W > 0 && CANVAS_AREA_H > 0) {
-          // If buffer doesn't exist but dimensions are valid, create it. Should ideally happen in setup.
-          console.log("Creating canvasPG buffer in windowResized as it was null.");
-          canvasPG = createGraphics(CANVAS_AREA_W, CANVAS_AREA_H);
-          canvasPG.background(255);
-     } else {
-         // console.log("canvasPG exists and size matches, or dimensions are invalid. No resize needed for canvasPG.");
-          if ((!canvasPG || canvasPG.width <= 0 || canvasPG.height <= 0) && (CANVAS_AREA_W <= 0 || CANVAS_AREA_H <= 0)) {
-             console.warn("Both canvasPG buffer and target dimensions are invalid after resize. Rendering might be affected.");
-             // Attempt to clean up if an invalid buffer exists
-              if (canvasPG) { try { canvasPG.remove(); } catch(e) {} canvasPG = null; }
-          }
-     }
-
-
-     // --- Ensure textMeasurePG is initialized or re-initialized defensively ---
-     // This small buffer typically doesn't need resizing based on window size, just existence and context config.
-     if (!textMeasurePG || typeof textMeasurePG.textWidth !== 'function') { // Check existence and basic functionality
-          console.log("Recreating textMeasurePG buffer in windowResized as it was null or invalid.");
-          if (textMeasurePG) { try { textMeasurePG.remove(); } catch(e) {} } // Attempt to clean up if something was there
-          try {
-               textMeasurePG = createGraphics(10, 10); // Small valid size
-               // Re-apply essential text properties
-                if (baseFont && typeof textMeasurePG.textFont === 'function') textMeasurePG.textFont(baseFont);
-                if (typeof textMeasurePG.textAlign === 'function') textMeasurePG.textAlign(CENTER, CENTER);
-          } catch(e) {
-               console.error("Failed to recreate textMeasurePG in windowResized:", e);
-               textMeasurePG = null; // Ensure it's explicitly null on failure
-          }
-     }
-
-     console.log(`Finished windowResized. CANVAS_AREA: ${CANVAS_AREA_X}, ${CANVAS_AREA_Y}, ${CANVAS_AREA_W}, ${CANVAS_AREA_H}`);
-}
-
 
 // Add touch event handlers to mirror mouse behavior
 // NOTE: Mouse events like mousePressed and touchStarted might fire for the *same interaction* depending on browser/device.
@@ -2055,6 +2280,9 @@ function touchStarted(event) {
      // event.preventDefault(); // This is strong and might break needed scrolling. Let's apply selectively.
 
     // Get the position of the first touch point
+    // Ensure there is at least one touch
+    if (touches.length === 0) return true; // Allow default if no touches detected
+
     let touchX = touches[0].x;
     let touchY = touches[0].y;
 
@@ -2075,7 +2303,9 @@ function touchStarted(event) {
           } else {
                // If a touch starts *not* on the grabbed item, assume it's intended for something else (e.g., page scroll)
                // But if mousePressed blocked other grabs, touch should too. Don't allow grabbing a *new* item if one is already held.
-              return false; // Don't try to grab a new item if one is already grabbed
+               // Also, if grabbing an item, prevent interaction with other items or background clicks.
+               if (event.cancelable) event.preventDefault(); // Prevent clicks on background or other items
+               return false; // Don't try to grab a new item if one is already grabbed
           }
      }
 
@@ -2144,7 +2374,9 @@ function touchStarted(event) {
 }
 
 function touchMoved(event) {
-    // Get touch position (only first touch for single-finger drag)
+     // Get touch position (only first touch for single-finger drag)
+    if (touches.length === 0) return true; // Allow default if no touches detected
+
     let touchX = touches[0].x;
     let touchY = touches[0].y;
 
@@ -2195,11 +2427,13 @@ function touchEnded(event) {
     return true;
 }
 
-// Function to check if touch is within canvas area (utility for touch events)
-// pX, pY are touch coordinates
-function isMouseOverCanvasArea(pX = mouseX, pY = mouseY) {
+// Function to check if coordinates are within canvas area (utility for touch events and mouseReleased)
+// pX, pY are coordinates
+function isMouseOverCanvasArea(pX, pY) {
     // Use coordinates passed, default to mouseX/Y if none provided
-    return pX >= CANVAS_AREA_X && pX <= CANVAS_AREA_X + CANVAS_AREA_W &&
-           pY >= CANVAS_AREA_Y && pY <= CANVAS_AREA_Y + CANVAS_AREA_H;
-}
+    const checkX = pX === undefined ? mouseX : pX;
+    const checkY = pY === undefined ? mouseY : pY;
+
+    return checkX >= CANVAS_AREA_X && checkX <= CANVAS_AREA_X + CANVAS_AREA_W &&
+           checkY >= CANVAS_AREA_Y && checkY <= CANVAS_AREA_Y + CANVAS_AREA_H;
 }
