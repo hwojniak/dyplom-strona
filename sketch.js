@@ -998,6 +998,16 @@ function draw() {
 
   // Set background for the main sketch window (black background as per request)
   background(0);
+  
+      // --- Add DEBUG logs here BEFORE drawing shapes/logo ---
+    // Check state of a few font variables
+    console.log("Draw loop start. Font variables state:",
+                "Bangers:", fontBangersRegular,
+                "Boogaloo:", fontBoogalooRegular,
+                "Sen:", fontSenRegular); // Check state of a few fonts
+    // Check state of logo image variable
+    console.log("Draw loop start. Logo image state:", logoImage);
+    // --- END DEBUG logs ---
 
   // --- Update shapes ---
   // Use a reverse loop with splice for better performance than filter
