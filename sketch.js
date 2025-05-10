@@ -576,113 +576,11 @@ class FloatingShape {
   // Draws the shape's core geometry or text centered at (px, py), with base size psize.
   // Assumes transformations (translate, rotate, scale) are already applied to the 'graphics' context.
   // This function uses methods provided by the graphics context (e.g., graphics.rect, graphics.text).
+    // Draws the shape's core geometry or text centered at (px, py), with base size psize.
+  // Assumes transformations (translate, rotate, scale) are already applied to the 'graphics' context.
+  // This function uses methods provided by the graphics context (e.g., graphics.rect, graphics.text).
+  // Note: This function should ONLY appear ONCE as a method inside the FloatingShape class { ... }
   drawShapePrimitive(graphics, px, py, psize, pshapeType, isText = false, textScaleAdjust = 0.2) {
-        // Check if graphics context is valid before attempting to draw primitives
-        if (!graphics || typeof graphics.rectMode !== 'function' || typeof graphics.text !== 'function') {
-             // console.warn("Invalid graphics context in drawShapePrimitive for item:", this); // Keep console logs for debugging
-             return; // Skip drawing if context is invalid
-         }
-
-         if (isNaN(px) || isNaN(py) || isNaN(psize) || psize <= 0) {
-             // console.warn("drawShapePrimitive: Invalid px, py, or psize.", {px, py, psize, item: this}); // Keep console logs for debugging
-             if(!isText) return; // Shapes need valid size, text can sometimes draw placeholder? But draw empty skipped.
-         }
-
-        if (isText) {
-             // Apply text properties to the provided graphics context
-             // Ensure textFont method exists on the graphics context
-             if (typeof graphics.textFont === 'function') {
-                 // This is the key line: use the item's font (which should be a p5.Font object) or fallback
-                 graphics.textFont(this.font || baseFont); // Use the item's font or fallback
-             } else {
-                 console.warn("Graphics context has no textFont method for text item:", this);
-             }
-
-             // Ensure textAlign method exists
-              if (typeof graphics.textAlign === 'function') {
-                 graphics.textAlign(CENTER, CENTER); // Set alignment
-              } else {
-                   console.warn("Graphics context has no textAlign method for text item:", this);
-              }
-
-
-             let effectiveTextSize = psize * textScaleAdjust; // Calculate effective size relative to base psize
-             // Clamp text size to avoid errors with extremely small or large values
-             effectiveTextSize = max(effectiveTextSize, 1); // Minimum size 1px
-              if (effectiveTextSize === Infinity || isNaN(effectiveTextSize)) effectiveTextSize = 16; // Fallback safety
-
-             // Ensure textSize method exists
-              if (typeof graphics.textSize === 'function') {
-                 graphics.textSize(effectiveTextSize); // Set text size
-              } else {
-                   console.warn("Graphics context has no textSize method for text item:", this);
-              }
-
-
-             // --- START DEBUG: Font Drawing Parameters ---
-             // *** THESE ARE UNCOMMENTED NOW ***
-             console.log("Drawing text:", this.content,
-                         "Size:", psize,
-                         "Effective Size:", effectiveTextSize,
-                         "Font Object:", this.font, // Check the actual font object being used
-                         "Font Name/Style:", this.font ? (this.font.font || this.font) : 'N/A', // Try to log font name property
-                         "Position:", {px, py},
-                         "Graphics context:", graphics === this ? "Main Canvas" : "canvasPG");
-             // --- END DEBUG ---
-
-
-             graphics.text(this.content, px, py); // Draw text centered at px, py
-
-         } else { // It's a shape
-              // Check if psize is valid before drawing shape primitives that depend on it
-              if (isNaN(psize) || psize <= 0) {
-                   // console.warn("drawShapePrimitive: Invalid psize for shape.", {psize, item: this}); // Keep console logs for debugging
-                   return; // Cannot draw shape without valid size
-               }
-              graphics.rectMode(CENTER); // Set rect drawing mode on this context
-
-             switch (pshapeType) {
-               case 'circle': graphics.ellipse(px, py, psize * 2); break; // p5 ellipse uses width/height (diameter)
-               case 'square': graphics.rect(px, py, psize, psize); break; // p5 rect in center mode uses width/height (side)
-               case 'triangle':
-                 graphics.beginShape();
-                 // Note: these points match your original code proportions relative to psize, centered roughly at 0,0
-                 graphics.vertex(px, py - psize * 0.8);
-                 graphics.vertex(px - psize * 0.8, py + psize * 0.4);
-                 graphics.vertex(px + psize * 0.8, py + psize * 0.4);
-                 graphics.endShape(CLOSE);
-                 break;
-               case 'pentagon':
-                  graphics.beginShape();
-                  let sidesP = 5; let radiusP = psize * 0.7; // Adjusted radius as per original drawing
-                  if (isNaN(radiusP) || radiusP <= 0) { console.warn("Invalid radiusP for pentagon", radiusP); break; }
-                  for (let i = 0; i < sidesP; i++) {
-                     let angle = TWO_PI / sidesP * i;
-                     let sx = cos(angle - HALF_PI) * radiusP;
-                     let sy = sin(angle - HALF_PI) * radiusP;
-                     graphics.vertex(px + sx, py + sy);
-                  }
-                  graphics.endShape(CLOSE);
-                  break;
-               case 'hexagon':
-                 graphics.beginShape();
-                 let sidesH = 6; let radiusH = psize; // Radius used as per original drawing
-                 if (isNaN(radiusH) || radiusH <= 0) { console.warn("Invalid radiusH for hexagon", radiusH); break; }
-                 for (let i = 0; i < sidesH; i++) {
-                    let angle = TWO_PI / sidesH * i;
-                    let sx = cos(angle) * radiusH;
-                    let sy = sin(angle) * radiusH;
-                    graphics.vertex(px + sx, py + sy);
-                 }
-                 graphics.endShape(CLOSE);
-                 break;
-               default:
-                   // Should not happen if shapeType is correctly picked, but defensive.
-                  // console.warn("drawShapePrimitive: Unknown shape type:", pshapeType); // Keep console logs for debugging
-                 break; // Draw nothing for unknown types
-             }
-         }
-   }
         // Check if graphics context is valid before attempting to draw primitives
         if (!graphics || typeof graphics.rectMode !== 'function' || typeof graphics.text !== 'function') {
              // console.warn("Invalid graphics context in drawShapePrimitive for item:", this); // Keep console logs for debugging
