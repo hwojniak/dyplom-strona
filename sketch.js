@@ -608,6 +608,29 @@ class FloatingShape {
 
              graphics.textSize(effectiveTextSize); // Set text size
 
+								drawShapePrimitive(graphics, px, py, psize, pshapeType, isText = false, textScaleAdjust = 0.2) {
+									// ... (initial validity checks) ...
+
+									if (isText) {
+										 // ... (existing font/alignment/size setup) ...
+
+										 // --- START DEBUG: Font Drawing Parameters ---
+										 console.log("Drawing text:", this.content,
+													 "Size:", psize,
+													 "Effective Size:", effectiveTextSize,
+													 "Font Object:", this.font, // Check the actual font object being used
+													 "Font Name/Style:", this.font ? (this.font.font || this.font) : 'N/A', // Try to log name or fallback
+													 "Position:", {px, py},
+													 "Graphics context:", graphics === this ? "Main Canvas" : "canvasPG");
+										 // --- END DEBUG ---
+
+             graphics.text(this.content, px, py); // Draw text centered at px, py
+
+         } else { // It's a shape
+           // ... (existing shape drawing code) ...
+         }
+   }
+
              graphics.text(this.content, px, py); // Draw text centered at px, py
 
          } else { // It's a shape
@@ -1117,25 +1140,48 @@ function draw() {
   noStroke(); // No stroke for the header background rect
   rect(0, 0, width, HEADER_HEIGHT); // Fills from (0,0) to windowWidth, HEADER_HEIGHT
 
-  // Draw the placeholder logo text on top of the header background
-  fill(50); // Dark grey color for text
-  textSize(20);
-  textAlign(LEFT, CENTER);
-  // Use baseFont for UI text if it's loaded or falls back to CSS string
-   // Check if baseFont is a p5.Font object or just a string before setting.
-   // Use textFont(baseFont) only if baseFont is truthy and has font methods, otherwise default.
-  if (baseFont && typeof textFont === 'function') { // Check if global textFont exists
-      // P5's global textFont accepts both p5.Font object and CSS string
-      textFont(baseFont);
-  } else {
-      // textFont is not available or baseFont is problematic, fallback
-      // P5 defaults to Arial/Helvetica if textFont is never called or fails.
-      // No explicit textFont call here, rely on P5 default or browser default.
-       // console.warn("textFont function not available or baseFont is invalid. Using default font."); // Keep console logs for debugging
-  }
+    // --- START: Draw the Header Logo (SVG or Fallback Text) ---
+    // Find where you currently draw the text logo and REPLACE it with this block
+    let logoX = 20;
+    let logoCenterY = HEADER_HEIGHT / 2;
+    let logoTargetWidth = 150; // Adjust this value to control the logo's width
 
-  text("PLACEHOLDER\nLOGO", 20, HEADER_HEIGHT / 2); // Position left, vertically centered in header
+    // >>> THIS IS THE IF STATEMENT YOU NEED TO PASTE <<<
+    if (logoImage && typeof logoImage.width === 'number' && logoImage.width > 0) {
+         // If the logo image loaded successfully and has valid dimensions
+         let logoAspectRatio = logoImage.height / logoImage.width;
+         let logoTargetHeight = logoTargetWidth * logoAspectRatio; // Maintain aspect ratio
+
+         // Image is drawn from top-left corner. Calculate top-left (x, y) to center it vertically.
+         let logoDrawX = logoX; // Draw it starting at the same X position as the text
+         let logoDrawY = logoCenterY - logoTargetHeight / 2; // Position Y so its center aligns with header center
+
+         // --- START DEBUG: Logo Drawing Parameters ---
+         console.log("Drawing logo:", logoImage,
+                     "Draw Pos:", {logoDrawX, logoDrawY},
+                     "Draw Size:", {logoTargetWidth, logoTargetHeight});
+         // --- END DEBUG ---
+
+         imageMode(CORNER); // Ensure image is drawn from top-left (default, but good to be explicit)
+         image(logoImage, logoDrawX, logoDrawY, logoTargetWidth, logoTargetHeight);
+
+    } else {
+         // Fallback: If the logo image didn't load, draw the placeholder text instead
+         console.warn("Drawing fallback logo text because SVG failed loading check.");
+         fill(50); // Dark grey color for text
+         textSize(20);
+         textAlign(LEFT, CENTER);
+          // Set font for the fallback text (use baseFont or one of your loaded fonts if preferred)
+          if (fontSenRegular && typeof fontSenRegular.text === 'function') { // Example: Use Sen-Regular for fallback text
+              textFont(fontSenRegular);
+          } else {
+              textFont(baseFont); // Fallback to monospace if Sen-Regular didn't load either
+          }
+         text("PLACEHOLDER\nLOGO", logoX, logoCenterY); // Draw fallback text at the target location
+    }
+    // --- END: Draw the Header Logo ---
 }
+
 
 // New function to handle all positioning logic for DOM elements and canvasPG
 function positionDOMElementsAndCanvasPG() {
