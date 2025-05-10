@@ -24,14 +24,14 @@ let CANVAS_AREA_Y; // Calculated in setup
 
 // Appearance constants
 const PALETTE = [
-  '#0000FE', // Blue triangle
-  '#FFDD00', // Yellow pentagon
-  '#E70012', // Red hexagon
-  '#FE4DD3', // Pink square
-  '#41AD4A', // Green shape
+  '#0000FE', // Blue 
+  '#FFDD00', // Yellow 
+  '#E70012', // Red 
+  '#FE4DD3', // Pink 
+  '#41AD4A', // Green 
   '#000000', // Black
-  '#222222', // Dark Grey
-  '#FFFFFF',  // White
+  '#222222', // Grey
+  '#FFFFFF', // White
   '#FFA500', // Orange
 ];
 
@@ -2201,4 +2201,5 @@ function isMouseOverCanvasArea(pX = mouseX, pY = mouseY) {
     // Use coordinates passed, default to mouseX/Y if none provided
     return pX >= CANVAS_AREA_X && pX <= CANVAS_AREA_X + CANVAS_AREA_W &&
            pY >= CANVAS_AREA_Y && pY <= CANVAS_AREA_Y + CANVAS_AREA_H;
+}
 }
