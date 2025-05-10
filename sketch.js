@@ -910,15 +910,6 @@ if (!textMeasurePG || typeof textMeasurePG.textWidth !== 'function') {
           // ... error handling ...
      }
 }
-	 
-     // Ensure the font is set on this buffer's context immediately
-     if (baseFont && typeof textMeasurePG.textFont === 'function') { // Check if baseFont is usable and method exists
-         textMeasurePG.textFont(baseFont);
-     } else if (typeof textMeasurePG.textFont === 'function'){
-          // Fallback to a default font if baseFontRef is not provided or invalid
-         textMeasurePG.textFont('monospace'); // Or another safe default
-     }
-
 
   // --- Input element setup ---
   inputElement = createInput();
