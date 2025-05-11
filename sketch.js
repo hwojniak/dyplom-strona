@@ -446,11 +446,13 @@ class FloatingShape {
   updateLanding() {
     if(this.isPlacing && !this.isGrabbed) {
         let elapsed = frameCount - this.landFrame;
-        let duration = 45; // Duration of the landing animation in frames
+        let duration = 25; // Reduced from 45 to 25 frames for quicker animation
         if (elapsed <= duration) {
             let t = map(elapsed, 0, duration, 0, 1);
-            let easedT = t * t * (3 - 2 * t); // Smoothstep easing
-            let pulseScale = 1 + easedT * 0.07; // Scale up by 7% and back
+            // Use a combination of ease-out and bounce effect
+            let easedT = 1 - pow(1 - t, 2); // Quadratic ease-out
+            let bounceT = sin(easedT * PI * 2) * 0.1; // Subtle bounce
+            let pulseScale = 1 + easedT * 0.05 + bounceT; // Reduced base scale (5%) plus bounce
             this.tempScaleEffect = pulseScale;
         } else {
             // Animation finished
