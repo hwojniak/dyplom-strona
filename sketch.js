@@ -67,7 +67,7 @@ let fontSenRegular;
 let fontShareTechMonoRegular;
 let fontVT323Regular;
 
-// List to hold successfully loaded p5.Font objects
+// List to hold successfully loaded p5.Font objects - POPULATED IN CALLBACKS
 let loadedFontsList = [];
 // --- END: Variables for ALL Loaded Fonts ---
 
@@ -240,14 +240,14 @@ function getTextBounds(content, effectiveTextSize, fontRef) { // Renamed baseFon
     try {
         // Apply font properties to the measurement buffer context
         // Use the font reference provided, or a default if none/invalid
-        // --- REFINED FONT CHECK START ---
-        if (fontRef && fontRef !== baseFont) { // Check if it's a truthy font object (and not the fallback string)
-             if (textMeasurePG.textFont) textMeasurePG.textFont(fontRef);
+        // Check if fontRef is a truthy font object (and not the fallback string)
+        if (fontRef && fontRef !== baseFont) {
+             if (typeof textMeasurePG.textFont === 'function') textMeasurePG.textFont(fontRef);
         } else {
              // Fallback to baseFont string
-             if (textMeasurePG.textFont) textMeasurePG.textFont(baseFont);
+             if (typeof textMeasurePG.textFont === 'function') textMeasurePG.textFont(baseFont);
         }
-        // --- REFINED FONT CHECK END ---
+
 
         if (textMeasurePG.textSize) textMeasurePG.textSize(effectiveTextSize); else return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
         if (textMeasurePG.textAlign) textMeasurePG.textAlign(CENTER, CENTER); else return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
@@ -516,7 +516,6 @@ class FloatingShape {
              // Apply text properties to the provided graphics context
              // Use the shape's assigned font
              let currentFont = this.font;
-             // --- REFINED FONT CHECK START ---
              // Check if currentFont is a truthy font object (and not the fallback string)
              if (currentFont && currentFont !== baseFont) {
                  if (typeof graphics.textFont === 'function') graphics.textFont(currentFont);
@@ -524,7 +523,6 @@ class FloatingShape {
                   // Fallback to baseFont string
                   if (typeof graphics.textFont === 'function') graphics.textFont(baseFont);
              }
-             // --- REFINED FONT CHECK END ---
 
 
               if (typeof graphics.textAlign === 'function') {
@@ -666,26 +664,26 @@ function preload() {
 
   // --- START: Load ALL specific fonts and logo ---
   // Providing empty function callbacks to prevent TypeError and handle async loading
-  // Added console logs to see which fonts successfully load
-  fontBangersRegular = loadFont('assets/Bangers-Regular.ttf', () => {console.log('Font loaded: Bangers-Regular');}, (err) => {console.error('Failed to load font: Bangers-Regular', err);});
-  fontBoogalooRegular = loadFont('assets/Boogaloo-Regular.ttf', () => {console.log('Font loaded: Boogaloo-Regular');}, (err) => {console.error('Failed to load font: Boogaloo-Regular', err);});
-  fontBreeSerifRegular = loadFont('assets/BreeSerif-Regular.ttf', () => {console.log('Font loaded: BreeSerif-Regular');}, (err) => {console.error('Failed to load font: BreeSerif-Regular', err);});
-  fontCaveatBrushRegular = loadFont('assets/CaveatBrush-Regular.ttf', () => {console.log('Font loaded: CaveatBrush-Regular');}, (err) => {console.error('Failed to load font: CaveatBrush-Regular', err);});
-  fontCherryBombOneRegular = loadFont('assets/CherryBombOne-Regular.ttf', () => {console.log('Font loaded: CherryBombOne-Regular');}, (err) => {console.error('Failed to load font: CherryBombOne-Regular', err);});
-  fontCinzelDecorativeBlack = loadFont('assets/CinzelDecorative-Black.ttf', () => {console.log('Font loaded: CinzelDecorative-Black');}, (err) => {console.error('Failed to load font: CinzelDecorative-Black', err);});
-  fontCinzelDecorativeBold = loadFont('assets/CinzelDecorative-Bold.ttf', () => {console.log('Font loaded: CinzelDecorative-Bold', );}, (err) => {console.error('Failed to load font: CinzelDecorative-Bold', err);});
-  fontCinzelDecorativeRegular = loadFont('assets/CinzelDecorative-Regular.ttf', () => {console.log('Font loaded: CinzelDecorative-Regular');}, (err) => {console.error('Failed to load font: CinzelDecorative-Regular', err);});
-  fontDynaPuffBold = loadFont('assets/DynaPuff-Bold.ttf', () => {console.log('Font loaded: DynaPuff-Bold');}, (err) => {console.error('Failed to load font: DynaPuff-Bold', err);});
-  fontDynaPuffMedium = loadFont('assets/DynaPuff-Medium.ttf', () => {console.log('Font loaded: DynaPuff-Medium');}, (err) => {console.error('Failed to load font: DynaPuff-Medium', err);});
-  fontDynaPuffRegular = loadFont('assets/DynaPuff-Regular.ttf', () => {console.log('Font loaded: DynaPuff-Regular');}, (err) => {console.error('Failed to load font: DynaPuff-Regular', err);});
-  fontInterBold = loadFont('assets/Inter-Bold.ttf', () => {console.log('Font loaded: Inter-Bold');}, (err) => {console.error('Failed to load font: Inter-Bold', err);});
-  fontInterRegular = loadFont('assets/Inter-Regular.ttf', () => {console.log('Font loaded: Inter-Regular');}, (err) => {console.error('Failed to load font: Inter-Regular', err);});
-  fontPixelifySansRegular = loadFont('assets/PixelifySans-Regular.ttf', () => {console.log('Font loaded: PixelifySans-Regular');}, (err) => {console.error('Failed to load font: PixelifySans-Regular', err);});
-  fontSenBold = loadFont('assets/Sen-Bold.ttf', () => {console.log('Font loaded: Sen-Bold');}, (err) => {console.error('Failed to load font: Sen-Bold', err);});
-  fontSenMedium = loadFont('assets/Sen-Medium.ttf', () => {console.log('Font loaded: Sen-Medium');}, (err) => {console.error('Failed to load font: Sen-Medium', err);});
-  fontSenRegular = loadFont('assets/Sen-Regular.ttf', () => {console.log('Font loaded: Sen-Regular');}, (err) => {console.error('Failed to load font: Sen-Regular', err);});
-  fontShareTechMonoRegular = loadFont('assets/ShareTechMono-Regular.ttf', () => {console.log('Font loaded: ShareTechMono-Regular');}, (err) => {console.error('Failed to load font: ShareTechMono-Regular', err);});
-  fontVT323Regular = loadFont('assets/VT323-Regular.ttf', () => {console.log('Font loaded: VT323-Regular');}, (err) => {console.error('Failed to load font: VT323-Regular', err);});
+  // ADDED: Push loaded font object to loadedFontsList in the success callback
+  fontBangersRegular = loadFont('assets/Bangers-Regular.ttf', (font) => {console.log('Font loaded: Bangers-Regular'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: Bangers-Regular', err);});
+  fontBoogalooRegular = loadFont('assets/Boogaloo-Regular.ttf', (font) => {console.log('Font loaded: Boogaloo-Regular'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: Boogaloo-Regular', err);});
+  fontBreeSerifRegular = loadFont('assets/BreeSerif-Regular.ttf', (font) => {console.log('Font loaded: BreeSerif-Regular'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: BreeSerif-Regular', err);});
+  fontCaveatBrushRegular = loadFont('assets/CaveatBrush-Regular.ttf', (font) => {console.log('Font loaded: CaveatBrush-Regular'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: CaveatBrush-Regular', err);});
+  fontCherryBombOneRegular = loadFont('assets/CherryBombOne-Regular.ttf', (font) => {console.log('Font loaded: CherryBombOne-Regular'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: CherryBombOne-Regular', err);});
+  fontCinzelDecorativeBlack = loadFont('assets/CinzelDecorative-Black.ttf', (font) => {console.log('Font loaded: CinzelDecorative-Black'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: CinzelDecorative-Black', err);});
+  fontCinzelDecorativeBold = loadFont('assets/CinzelDecorative-Bold.ttf', (font) => {console.log('Font loaded: CinzelDecorative-Bold', ); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: CinzelDecorative-Bold', err);});
+  fontCinzelDecorativeRegular = loadFont('assets/CinzelDecorative-Regular.ttf', (font) => {console.log('Font loaded: CinzelDecorative-Regular'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: CinzelDecorative-Regular', err);});
+  fontDynaPuffBold = loadFont('assets/DynaPuff-Bold.ttf', (font) => {console.log('Font loaded: DynaPuff-Bold'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: DynaPuff-Bold', err);});
+  fontDynaPuffMedium = loadFont('assets/DynaPuff-Medium.ttf', (font) => {console.log('Font loaded: DynaPuff-Medium'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: DynaPuff-Medium', err);});
+  fontDynaPuffRegular = loadFont('assets/DynaPuff-Regular.ttf', (font) => {console.log('Font loaded: DynaPuff-Regular'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: DynaPuff-Regular', err);});
+  fontInterBold = loadFont('assets/Inter-Bold.ttf', (font) => {console.log('Font loaded: Inter-Bold'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: Inter-Bold', err);});
+  fontInterRegular = loadFont('assets/Inter-Regular.ttf', (font) => {console.log('Font loaded: Inter-Regular'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: Inter-Regular', err);});
+  fontPixelifySansRegular = loadFont('assets/PixelifySans-Regular.ttf', (font) => {console.log('Font loaded: PixelifySans-Regular'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: PixelifySans-Regular', err);});
+  fontSenBold = loadFont('assets/Sen-Bold.ttf', (font) => {console.log('Font loaded: Sen-Bold'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: Sen-Bold', err);});
+  fontSenMedium = loadFont('assets/Sen-Medium.ttf', (font) => {console.log('Font loaded: Sen-Medium'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: Sen-Medium', err);});
+  fontSenRegular = loadFont('assets/Sen-Regular.ttf', (font) => {console.log('Font loaded: Sen-Regular'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: Sen-Regular', err);});
+  fontShareTechMonoRegular = loadFont('assets/ShareTechMono-Regular.ttf', (font) => {console.log('Font loaded: ShareTechMono-Regular'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: ShareTechMono-Regular', err);});
+  fontVT323Regular = loadFont('assets/VT323-Regular.ttf', (font) => {console.log('Font loaded: VT323-Regular'); loadedFontsList.push(font);}, (err) => {console.error('Failed to load font: VT323-Regular', err);});
 
   // Provided empty function callbacks for loadImage as well
   logoImage = loadImage('assets/placeholder-logo.svg', () => {console.log('Logo loaded');}, (err) => {console.error('Failed to load logo', err);});
@@ -715,20 +713,9 @@ function setup() {
     if (typeof textMeasurePG.textAlign === 'function') textMeasurePG.textAlign(CENTER, CENTER);
     if (typeof textMeasurePG.textSize === 'function') textMeasurePG.textSize(16); // Default size for measurement setup
 
-    // Populate the list of actually loaded fonts
-    const potentialFonts = [
-        fontBangersRegular, fontBoogalooRegular, fontBreeSerifRegular, fontCaveatBrushRegular,
-        fontCherryBombOneRegular, fontCinzelDecorativeBlack, fontCinzelDecorativeBold,
-        fontCinzelDecorativeRegular, fontDynaPuffBold, fontDynaPuffMedium, fontDynaPuffRegular,
-        fontInterBold, fontInterRegular, fontPixelifySansRegular, fontSenBold, fontSenMedium,
-        fontSenRegular, fontShareTechMonoRegular, fontVT323Regular
-    ];
-
-    // Filter for fonts that loaded successfully AND appear to be valid p5.Font objects
-    // We'll use a simpler check in the draw/measure functions, but this filter ensures we only
-    // add potentially usable objects to the list.
-    loadedFontsList = potentialFonts.filter(f => f && typeof f === 'object' && typeof f.text === 'function'); // Added typeof f === 'object'
-    console.log(`SETUP: Found ${loadedFontsList.length} usable p5.Font objects.`);
+    // REMOVED: The loop that tried to filter fonts here.
+    // The loadedFontsList is now populated asynchronously in preload callbacks.
+    console.log(`SETUP: Initial loadedFontsList size: ${loadedFontsList.length}. Will populate as fonts load.`);
 
 
   // Create DOM elements
@@ -794,6 +781,8 @@ function setup() {
    initialPositioningDone = false; // Will be set true after first positioning
 
   // Create initial floating shapes
+  // These shapes might initially use the fallback font if loadFont callbacks haven't run yet.
+  // New shapes created later will use loaded fonts as they become available.
   while (shapes.length < 30) { shapes.push(new FloatingShape()); }
 }
 
@@ -819,6 +808,7 @@ function draw() {
   }
 
   // Add new shapes if the count drops below a threshold
+  // These new shapes will pick from the loadedFontsList which is now populated asynchronously
   while (shapes.length < 20) { shapes.push(new FloatingShape()); }
 
 
@@ -908,13 +898,11 @@ function draw() {
          textAlign(LEFT, CENTER);
           // Use textFont directly in the main drawing context
           // Use Sen-Regular if loaded, otherwise fallback string
-          // --- REFINED FONT CHECK START ---
           if (fontSenRegular && fontSenRegular !== baseFont) { // Check if it's a truthy font object
               textFont(fontSenRegular);
           } else {
               textFont(baseFont); // Use monospace string
           }
-          // --- REFINED FONT CHECK END ---
          text("COMPOSTER", logoX, logoCenterY); // Use "COMPOSTER" as fallback text
     }
     // --- END: Draw the Header Logo ---
@@ -1573,7 +1561,6 @@ function saveCanvasAreaAsHighResPNG() {
              let itemTextScale = isNaN(item.textScaleAdjust) ? 0.2 : item.textScaleAdjust;
              itemTextScale = max(itemTextScale, 1e-3); // Ensure text scale adjust is positive
 
-             // --- REFINED FONT CHECK START ---
              // Check if itemFont is a truthy font object (and not the fallback string)
              if (itemFont && itemFont !== baseFont) {
                  if (typeof highResPG.textFont === 'function') highResPG.textFont(itemFont);
@@ -1582,7 +1569,6 @@ function saveCanvasAreaAsHighResPNG() {
                   console.warn("saveHighResPNG: Item font invalid or not loaded. Using fallback font for item:", item);
                   if (typeof highResPG.textFont === 'function') highResPG.textFont(baseFont); // Fallback to string
              }
-             // --- REFINED FONT CHECK END ---
 
 
              item.drawShapePrimitive(highResPG, 0, 0, item.size, item.shapeType, item.type === 'text', itemTextScale);
@@ -1696,7 +1682,6 @@ function saveCanvasAreaAsPDF() {
              let itemTextScale = isNaN(item.textScaleAdjust) ? 0.2 : item.textScaleAdjust;
              itemTextScale = max(itemTextScale, 1e-3); // Ensure text scale adjust is positive
 
-             // --- REFINED FONT CHECK START ---
              // Check if itemFont is a truthy font object (and not the fallback string)
              if (itemFont && itemFont !== baseFont) {
                   if (typeof pdf.textFont === 'function') pdf.textFont(itemFont);
@@ -1705,7 +1690,6 @@ function saveCanvasAreaAsPDF() {
                   console.warn("savePDF: Item font invalid or not loaded. Using fallback font for item:", item);
                    if (typeof pdf.textFont === 'function') pdf.textFont(baseFont); // Fallback to string
              }
-             // --- REFINED FONT CHECK END ---
 
             // Draw the shape primitive onto the PDF context
             item.drawShapePrimitive(pdf, 0, 0, item.size, item.shapeType, item.type === 'text', itemTextScale);
