@@ -67,7 +67,7 @@ let fontSenRegular;
 let fontShareTechMonoRegular;
 let fontVT323Regular;
 
-// NEW: List to hold successfully loaded p5.Font objects
+// List to hold successfully loaded p5.Font objects
 let loadedFontsList = [];
 // --- END: Variables for ALL Loaded Fonts ---
 
@@ -125,7 +125,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
   let l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
   if (l2 === 0) return dist(px, py, x1, y1);
 
-  let t = ((px - x1) * (x2 - x1) + (py - y1) * (py - y1)) / l2; // Corrected dot product calculation
+  let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2; // Corrected dot product calculation
   t = max(0, min(1, t));
 
   let closestX = x1 + t * (x2 - x1);
@@ -137,8 +137,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
 // Gets local vertices for unrotated polygon shapes centered at (0,0).
 function getTriangleVertices(size) {
      if (isNaN(size) || size <= 0) return [];
-    let h = size * 0.8; // This scaling seems arbitrary, matching drawPrimitive might be better
-    // Let's match drawShapePrimitive's coordinates for consistency
+    // Matching drawShapePrimitive's coordinates
     return [{ x: 0, y: -size * 0.8 }, { x: -size * 0.8, y: size * 0.4 }, { x: size * 0.8, y: size * 0.4 }];
 }
 
@@ -206,9 +205,6 @@ function isPointInConvexPolygon(px, py, vertices) {
 
    // If we got here, all cross products have the same sign (or are zero).
    // This means the point is inside or on an edge.
-   // We need to make sure it's not just *on* an edge if strict inside is required,
-   // but for mouse picking, inside OR on edge is usually fine.
-   // The separate isPointNearPolygonEdge handles the 'near edge' tolerance.
    return true;
 }
 
@@ -227,10 +223,10 @@ function isPointNearPolygonEdge(px, py, vertices, tolerance) {
     return false;
 }
 
-// FIX: Calculates text bounding box using a *single, persistent* graphics buffer.
+// Calculates text bounding box using a *single, persistent* graphics buffer.
 let textMeasurePG; // Declare the global variable here
 
-function getTextBounds(content, effectiveTextSize, baseFontRef) {
+function getTextBounds(content, effectiveTextSize, fontRef) { // Renamed baseFontRef to fontRef for clarity
      if (typeof content !== 'string' || isNaN(effectiveTextSize) || effectiveTextSize <= 0) {
           return { w: 0, h: 0 }; // Return zero bounds for invalid input
      }
@@ -244,21 +240,14 @@ function getTextBounds(content, effectiveTextSize, baseFontRef) {
     try {
         // Apply font properties to the measurement buffer context
         // Use the font reference provided, or a default if none/invalid
-        // Check if baseFontRef is a p5.Font object or a string
-        if (baseFontRef) {
-            if (typeof baseFontRef === 'string') {
-                 if (textMeasurePG.textFont) textMeasurePG.textFont(baseFontRef);
-            } else if (baseFontRef.text && typeof baseFontRef.text === 'function') { // Check if it's a p5.Font object
-                 if (textMeasurePG.textFont) textMeasurePG.textFont(baseFontRef);
-            } else {
-                 // Invalid font reference, fall back
-                 if (textMeasurePG.textFont) textMeasurePG.textFont(baseFont); // Use baseFont string
-            }
+        // --- REFINED FONT CHECK START ---
+        if (fontRef && fontRef !== baseFont) { // Check if it's a truthy font object (and not the fallback string)
+             if (textMeasurePG.textFont) textMeasurePG.textFont(fontRef);
         } else {
-             // No font reference provided, fall back
-             if (textMeasurePG.textFont) textMeasurePG.textFont(baseFont); // Use baseFont string
+             // Fallback to baseFont string
+             if (textMeasurePG.textFont) textMeasurePG.textFont(baseFont);
         }
-
+        // --- REFINED FONT CHECK END ---
 
         if (textMeasurePG.textSize) textMeasurePG.textSize(effectiveTextSize); else return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
         if (textMeasurePG.textAlign) textMeasurePG.textAlign(CENTER, CENTER); else return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
@@ -282,6 +271,7 @@ function getTextBounds(content, effectiveTextSize, baseFontRef) {
 
     } catch (e) {
         // Fallback estimate on error
+        console.error("Error in getTextBounds:", e);
         return { w: effectiveTextSize * (content ? content.length : 0.5) * 0.6, h: effectiveTextSize * 1.2 };
     }
 }
@@ -360,7 +350,7 @@ class FloatingShape {
          this.content = initialContent.trim();
          this.textScaleAdjust = category.textScaleAdjust;
 
-         // --- MODIFICATION START: Assign a random loaded font ---
+         // Assign a random loaded font
          if (loadedFontsList.length > 0) {
              this.font = random(loadedFontsList); // Pick a random p5.Font object
              // console.log(`RESET: Assigned font:`, this.font ? this.font.font.names.postscriptName : 'Fallback'); // Debug font name
@@ -368,7 +358,6 @@ class FloatingShape {
              this.font = baseFont; // Fallback to the string 'monospace'
              // console.log(`RESET: Using fallback font:`, this.font); // Debug fallback
          }
-         // --- MODIFICATION END ---
 
 
     } else { // type is 'shape'
@@ -527,13 +516,15 @@ class FloatingShape {
              // Apply text properties to the provided graphics context
              // Use the shape's assigned font
              let currentFont = this.font;
-             // Check if currentFont is a p5.Font object before using textFont method
-             if (currentFont && typeof currentFont.text === 'function') {
+             // --- REFINED FONT CHECK START ---
+             // Check if currentFont is a truthy font object (and not the fallback string)
+             if (currentFont && currentFont !== baseFont) {
                  if (typeof graphics.textFont === 'function') graphics.textFont(currentFont);
              } else {
-                  // Fallback to baseFont string if shape font is invalid or not a p5.Font
+                  // Fallback to baseFont string
                   if (typeof graphics.textFont === 'function') graphics.textFont(baseFont);
              }
+             // --- REFINED FONT CHECK END ---
 
 
               if (typeof graphics.textAlign === 'function') {
@@ -675,6 +666,7 @@ function preload() {
 
   // --- START: Load ALL specific fonts and logo ---
   // Providing empty function callbacks to prevent TypeError and handle async loading
+  // Added console logs to see which fonts successfully load
   fontBangersRegular = loadFont('assets/Bangers-Regular.ttf', () => {console.log('Font loaded: Bangers-Regular');}, (err) => {console.error('Failed to load font: Bangers-Regular', err);});
   fontBoogalooRegular = loadFont('assets/Boogaloo-Regular.ttf', () => {console.log('Font loaded: Boogaloo-Regular');}, (err) => {console.error('Failed to load font: Boogaloo-Regular', err);});
   fontBreeSerifRegular = loadFont('assets/BreeSerif-Regular.ttf', () => {console.log('Font loaded: BreeSerif-Regular');}, (err) => {console.error('Failed to load font: BreeSerif-Regular', err);});
@@ -723,7 +715,7 @@ function setup() {
     if (typeof textMeasurePG.textAlign === 'function') textMeasurePG.textAlign(CENTER, CENTER);
     if (typeof textMeasurePG.textSize === 'function') textMeasurePG.textSize(16); // Default size for measurement setup
 
-    // --- MODIFICATION START: Populate the list of actually loaded fonts ---
+    // Populate the list of actually loaded fonts
     const potentialFonts = [
         fontBangersRegular, fontBoogalooRegular, fontBreeSerifRegular, fontCaveatBrushRegular,
         fontCherryBombOneRegular, fontCinzelDecorativeBlack, fontCinzelDecorativeBold,
@@ -732,10 +724,11 @@ function setup() {
         fontSenRegular, fontShareTechMonoRegular, fontVT323Regular
     ];
 
-    // Filter for fonts that loaded successfully AND have the necessary methods (like .text for p5.Font)
-    loadedFontsList = potentialFonts.filter(f => f && typeof f.text === 'function');
+    // Filter for fonts that loaded successfully AND appear to be valid p5.Font objects
+    // We'll use a simpler check in the draw/measure functions, but this filter ensures we only
+    // add potentially usable objects to the list.
+    loadedFontsList = potentialFonts.filter(f => f && typeof f === 'object' && typeof f.text === 'function'); // Added typeof f === 'object'
     console.log(`SETUP: Found ${loadedFontsList.length} usable p5.Font objects.`);
-    // --- MODIFICATION END ---
 
 
   // Create DOM elements
@@ -915,11 +908,13 @@ function draw() {
          textAlign(LEFT, CENTER);
           // Use textFont directly in the main drawing context
           // Use Sen-Regular if loaded, otherwise fallback string
-          if (fontSenRegular && typeof fontSenRegular.text === 'function') {
+          // --- REFINED FONT CHECK START ---
+          if (fontSenRegular && fontSenRegular !== baseFont) { // Check if it's a truthy font object
               textFont(fontSenRegular);
           } else {
               textFont(baseFont); // Use monospace string
           }
+          // --- REFINED FONT CHECK END ---
          text("COMPOSTER", logoX, logoCenterY); // Use "COMPOSTER" as fallback text
     }
     // --- END: Draw the Header Logo ---
@@ -963,7 +958,7 @@ function positionDOMElementsAndCanvasPG() {
      CANVAS_AREA_X = targetCANVAS_AREA_X;
      CANVAS_AREA_Y = targetCANVAS_AREA_Y;
 
-    // Resize canvasPG if dimensions have changed and are valid
+
     if (canvasPG && (canvasPG.width !== CANVAS_AREA_W || canvasPG.height !== CANVAS_AREA_H)) {
          if (CANVAS_AREA_W > 0 && CANVAS_AREA_H > 0) {
               canvasPG.resizeCanvas(CANVAS_AREA_W, CANVAS_AREA_H);
@@ -986,7 +981,7 @@ function positionDOMElementsAndCanvasPG() {
           try {
                textMeasurePG = createGraphics(10, 10); // Small size is fine for measurement
                // Re-apply essential text properties
-                if (typeof textMeasurePG.textFont === 'function') textMeasurePG.textFont(baseFont);
+               if (typeof textMeasurePG.textFont === 'function') textMeasurePG.textFont(baseFont);
                if (typeof textMeasurePG.textAlign === 'function') textMeasurePG.textAlign(CENTER, CENTER);
                if (typeof textMeasurePG.textSize === 'function') textMeasurePG.textSize(16);
           } catch(e) {
@@ -1112,32 +1107,28 @@ function mousePressed() {
   for (let i = shapes.length - 1; i >= 0; i--) {
       if (!shapes[i].isGrabbed) { // Only consider shapes that aren't already grabbed (shouldn't happen, but safe)
           if (shapes[i].isMouseOver(mouseX, mouseY)) {
-              // Found a floating shape, grab it
               grabbedItem = shapes[i];
               grabbedItem.isGrabbed = true;
-              grabbedItem.isPlacing = false; // Stop any animation
-              grabbedItem.solidify(); // Stop its own movement
+              grabbedItem.isPlacing = false;
+              grabbedItem.solidify();
 
-              // Move the grabbed item to the end of the shapes array so it's drawn last (on top)
               let temp = shapes.splice(i, 1)[0];
               shapes.push(temp);
 
-               // If it's a text item, populate and focus the input field
               if (grabbedItem.type === 'text') {
                  inputElement.value(grabbedItem.content || '');
                  inputElement.attribute('placeholder', '');
                  inputElement.elt.focus();
               } else {
-                 // If not text, clear input and blur focus
                  inputElement.value('');
                  inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
                   inputElement.elt.blur();
               }
-              return false; // Prevent default behavior
+              return false;
           }
       }
   }
-   return true; // Allow default behavior if nothing was clicked
+   return true;
 }
 
 // Handles mouse release events
@@ -1339,7 +1330,6 @@ function addNewTextShapeFromInput() {
     let newTextShape = new FloatingShape();
 
     // Override properties set by reset() for a text shape created from input
-    // We want it to be a text shape with the input content
     newTextShape.type = 'text';
     newTextShape.content = currentText.trim();
     newTextShape.shapeType = 'none'; // No polygon shape for text
@@ -1368,7 +1358,7 @@ function addNewTextShapeFromInput() {
      newTextShape.color = pickedColor;
 
 
-    // --- MODIFICATION START: Assign a random loaded font from the list ---
+    // Assign a random loaded font from the list
     if (loadedFontsList.length > 0) {
         newTextShape.font = random(loadedFontsList); // Pick a random p5.Font object
          // console.log(`addNewTextShapeFromInput: Assigned font:`, newTextShape.font ? newTextShape.font.font.names.postscriptName : 'Fallback'); // Debug font name
@@ -1376,7 +1366,6 @@ function addNewTextShapeFromInput() {
         newTextShape.font = baseFont; // Fallback to the string 'monospace'
          // console.log(`addNewTextShapeFromInput: Using fallback font:`, newTextShape.font); // Debug fallback
     }
-    // --- MODIFICATION END ---
 
 
      // --- Apply Custom SPAWN LOCATION for new text (near artboard sides), OVERRIDING reset() position/speed ---
@@ -1524,7 +1513,7 @@ function saveCanvasAreaAsHighResPNG() {
      const scaleFactor = targetWidthPixels / sourceWidthBase;
      // Calculate the scaled height of the original 4:5 content within the target dimensions
      const scaledSourceHeight = sourceHeightBase * scaleFactor;
-     // Calculate vertical offset to center the 4:5 content within the B2 height
+     // Calculate vertical offset to center the 4:5 content vertically
      const verticalOffset = (targetHeightPixels - scaledSourceHeight) / 2;
 
     let highResPG = null; // Variable for the high-resolution graphics buffer
@@ -1584,17 +1573,18 @@ function saveCanvasAreaAsHighResPNG() {
              let itemTextScale = isNaN(item.textScaleAdjust) ? 0.2 : item.textScaleAdjust;
              itemTextScale = max(itemTextScale, 1e-3); // Ensure text scale adjust is positive
 
-             // Check if itemFont is a valid p5.Font object before using it on the highResPG context
-             if (itemFont && typeof itemFont.text === 'function') {
+             // --- REFINED FONT CHECK START ---
+             // Check if itemFont is a truthy font object (and not the fallback string)
+             if (itemFont && itemFont !== baseFont) {
                  if (typeof highResPG.textFont === 'function') highResPG.textFont(itemFont);
              } else {
-                  // Fallback on highResPG if the specific item font is invalid or not a p5.Font object
+                  // Fallback on highResPG
                   console.warn("saveHighResPNG: Item font invalid or not loaded. Using fallback font for item:", item);
-                  if (fontSenRegular && typeof fontSenRegular.text === 'function') highResPG.textFont(fontSenRegular);
-                  else highResPG.textFont(baseFont); // Fallback to string
+                  if (typeof highResPG.textFont === 'function') highResPG.textFont(baseFont); // Fallback to string
              }
+             // --- REFINED FONT CHECK END ---
 
-             // Draw the shape primitive onto the high-res buffer
+
              item.drawShapePrimitive(highResPG, 0, 0, item.size, item.shapeType, item.type === 'text', itemTextScale);
 
             highResPG.pop(); // Restore graphics state
@@ -1674,12 +1664,12 @@ function saveCanvasAreaAsPDF() {
 
         pdf.beginRecord(); // Start recording drawing commands for the PDF
 
-        // Draw the white background for the PDF page (which represents the canvas area)
+        // Set PDF graphics properties
         pdf.fill(255);
         pdf.noStroke();
         pdf.rect(0, 0, CANVAS_AREA_W, CANVAS_AREA_H); // Draw background covering the whole PDF page
 
-        // Draw each placed item onto the PDF context
+
         for (let i = 0; i < placedItems.length; i++) {
              let item = placedItems[i];
 
@@ -1691,7 +1681,6 @@ function saveCanvasAreaAsPDF() {
              if (item.scaleFactor <= 0 || item.size <= 0) continue;
 
             pdf.push(); // Save graphics state
-
             // Calculate item's position relative to the PDF context origin (0,0),
             // which corresponds to the top-left of the canvas area.
             pdf.translate(item.x - CANVAS_AREA_X, item.y - CANVAS_AREA_Y);
@@ -1707,16 +1696,16 @@ function saveCanvasAreaAsPDF() {
              let itemTextScale = isNaN(item.textScaleAdjust) ? 0.2 : item.textScaleAdjust;
              itemTextScale = max(itemTextScale, 1e-3); // Ensure text scale adjust is positive
 
-             // Check if itemFont is a valid p5.Font object before using it on the PDF context
-             // PDF library might also handle font strings, but using p5.Font objects is preferred.
-             if (itemFont && typeof itemFont.text === 'function') {
+             // --- REFINED FONT CHECK START ---
+             // Check if itemFont is a truthy font object (and not the fallback string)
+             if (itemFont && itemFont !== baseFont) {
                   if (typeof pdf.textFont === 'function') pdf.textFont(itemFont);
              } else {
-                  // Fallback on PDF if the specific item font is invalid or not a p5.Font object
+                  // Fallback on PDF
                   console.warn("savePDF: Item font invalid or not loaded. Using fallback font for item:", item);
-                   if (fontSenRegular && typeof fontSenRegular.text === 'function') pdf.textFont(fontSenRegular);
-                  else pdf.textFont(baseFont); // Fallback to string
+                   if (typeof pdf.textFont === 'function') pdf.textFont(baseFont); // Fallback to string
              }
+             // --- REFINED FONT CHECK END ---
 
             // Draw the shape primitive onto the PDF context
             item.drawShapePrimitive(pdf, 0, 0, item.size, item.shapeType, item.type === 'text', itemTextScale);
@@ -1933,11 +1922,11 @@ function touchEnded(event) {
     return true; // Allow default behavior if no item was grabbed by touch
 }
 
-// Duplicate of isMouseOverCanvasArea - keeping for safety but could be removed
-// function isMouseOverCanvasArea(pX, pY) {
-//     const checkX = pX === undefined ? mouseX : pX;
-//     const checkY = pY === undefined ? mouseY : pY;
+// Helper function to check if a point is within the central canvas area
+function isMouseOverCanvasArea(pX, pY) {
+    const checkX = pX === undefined ? mouseX : pX;
+    const checkY = pY === undefined ? mouseY : pY;
 
-//     return checkX >= CANVAS_AREA_X && checkX <= CANVAS_AREA_X + CANVAS_AREA_W &&
-//            checkY >= CANVAS_AREA_Y && checkY <= CANVAS_AREA_Y + CANVAS_AREA_H;
-// }
+    return checkX >= CANVAS_AREA_X && checkX <= CANVAS_AREA_X + CANVAS_AREA_W &&
+           checkY >= CANVAS_AREA_Y && checkY <= CANVAS_AREA_Y + CANVAS_AREA_H;
+}
