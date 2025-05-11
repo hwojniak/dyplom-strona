@@ -1,4 +1,3 @@
-//--- START OF FILE sketch.js ---
 // FIX: Efficiency issues significantly improved with canvasPG and textMeasurePG
 // This version addresses user-specific bugs and preferences for Step 1.
 
@@ -658,6 +657,30 @@ function setup() {
     }
     // --- End Set initial textMeasurePG font ---
 
+    // --- DEBUG: Log font variable states after preload ---
+    console.log("SETUP: Font loading status:");
+    console.log("fontBangersRegular:", fontBangersRegular ? "Loaded" : "Failed");
+    console.log("fontBoogalooRegular:", fontBoogalooRegular ? "Loaded" : "Failed");
+    console.log("fontBreeSerifRegular:", fontBreeSerifRegular ? "Loaded" : "Failed");
+    console.log("fontCaveatBrushRegular:", fontCaveatBrushRegular ? "Loaded" : "Failed");
+    console.log("fontCherryBombOneRegular:", fontCherryBombOneRegular ? "Loaded" : "Failed");
+    console.log("fontCinzelDecorativeBlack:", fontCinzelDecorativeBlack ? "Loaded" : "Failed");
+    console.log("fontCinzelDecorativeBold:", fontCinzelDecorativeBold ? "Loaded" : "Failed");
+    console.log("fontCinzelDecorativeRegular:", fontCinzelDecorativeRegular ? "Loaded" : "Failed");
+    console.log("fontDynaPuffBold:", fontDynaPuffBold ? "Loaded" : "Failed");
+    console.log("fontDynaPuffMedium:", fontDynaPuffMedium ? "Loaded" : "Failed");
+    console.log("fontDynaPuffRegular:", fontDynaPuffRegular ? "Loaded" : "Failed");
+    console.log("fontInterBold:", fontInterBold ? "Loaded" : "Failed");
+    console.log("fontInterRegular:", fontInterRegular ? "Loaded" : "Failed");
+    console.log("fontPixelifySansRegular:", fontPixelifySansRegular ? "Loaded" : "Failed");
+    console.log("fontSenBold:", fontSenBold ? "Loaded" : "Failed");
+    console.log("fontSenMedium:", fontSenMedium ? "Loaded" : "Failed");
+    console.log("fontSenRegular:", fontSenRegular ? "Loaded" : "Failed");
+    console.log("fontShareTechMonoRegular:", fontShareTechMonoRegular ? "Loaded" : "Failed");
+    console.log("fontVT323Regular:", fontVT323Regular ? "Loaded" : "Failed");
+     console.log("logoImage:", logoImage && typeof logoImage.width === 'number' && logoImage.width > 0 ? "Loaded" : "Failed or Invalid");
+    // --- END DEBUG ---
+
 
   inputElement = createInput();
   inputElement.value('');
@@ -1191,8 +1214,14 @@ function addNewTextShapeFromInput() {
 
     if (usableFonts.length > 0) {
         newTextShape.font = random(usableFonts);
+         // --- DEBUG: Log selected font ---
+         console.log(`addNewTextShapeFromInput: ${usableFonts.length} usable fonts found. Assigned font:`, newTextShape.font);
+         // --- END DEBUG ---
     } else {
         newTextShape.font = baseFont;
+        // --- DEBUG: Log fallback font ---
+        console.log(`addNewTextShapeFromInput: 0 usable fonts found. Using fallback font:`, newTextShape.font);
+        // --- END DEBUG ---
     }
     // --- End font assignment ---
 
