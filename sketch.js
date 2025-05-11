@@ -6,7 +6,7 @@ let grabbedItem = null; // The shape currently being dragged
 let inputElement;
 let savePNGButton; // Existing button for standard PNG save
 let saveHighResPNGButton; // NEW button for high-resolution PNG save
-let savePDFButton;
+// let savePDFButton; // REMOVED: PDF button
 let refreshButton;
 let clearButton;
 // Layout constants
@@ -75,8 +75,7 @@ const CLICK_TOLERANCE = 5; // Pixels
 // --- Utility functions for precise mouse collision and text bounds ---
 // Transforms global coordinates to an object's local, unscaled, unrotated coordinates.
 function transformPointToLocal(gx, gy, objX, objY, objRotation, objScale) {
-    // Add check for zero scale to prevent division by zero or infinity
-    if (objScale === 0) {
+    if (objScale === 0 || isNaN(objScale) || objScale === Infinity) {
         return { x: NaN, y: NaN }; // Indicate invalid transformation
     }
     let tx = gx - objX;
@@ -92,7 +91,7 @@ function transformPointToLocal(gx, gy, objX, objY, objRotation, objScale) {
 
 // Checks if a point (px, py) is inside/near an axis-aligned rectangle (centered at 0,0) with tolerance.
 function isPointInAxisAlignedRect(px, py, w, h, tolerance = 0) {
-    if (isNaN(px) || isNaN(py) || isNaN(w) || isNaN(h) || w < 0 || h < 0) {
+    if (isNaN(px) || isNaN(py) || isNaN(w) || isNaN(h) || w < 0 || h < 0 || isNaN(tolerance) || tolerance < 0) {
         return false;
     }
     let halfW = w / 2;
@@ -153,9 +152,9 @@ function getHexagonVertices(size) {
     return vertices;
 }
 // Approximates a circle with vertices
-function getCircleVertices(size, segments = 30) {
+function getCircleVertices(size, segments = 60) { // Increased segments for smoother circle
     if (isNaN(size) || size <= 0) return [];
-    let radius = size; // Matches original scaling (ellipse uses diameter, but size * 2 was used, implying size was radius)
+    let radius = size; // Matches original scaling (ellipse used diameter, but size * 2 was used, implying size was radius)
     let vertices = [];
     for (let i = 0; i < segments; i++) {
         let angle = TWO_PI / segments * i;
@@ -175,26 +174,22 @@ function isPointInConvexPolygon(px, py, vertices) {
     let cross_product;
     for (let i = 0; i < numVertices; i++) {
         let v1 = vertices[i], v2 = vertices[(i + 1) % numVertices];
-        if (isNaN(v1.x) || isNaN(v1.y) || isNaN(v2.x) || isNaN(v2.y)) {
-            return false; // Invalid vertex
-        }
+         if (isNaN(v1.x) || isNaN(v1.y) || isNaN(v2.x) || isNaN(v2.y)) {
+             // console.warn("isPointInConvexPolygon: Invalid vertex found.");
+             return false; // Invalid vertex
+         }
+        // Use a small epsilon for floating point comparisons
         cross_product = (v2.x - v1.x) * (py - v1.y) - (v2.y - v1.y) * (px - v1.x);
-        if (cross_product > 1e-6) has_pos = true;
-        if (cross_product < -1e-6) has_neg = true;
+
+        if (cross_product > 1e-9) has_pos = true;
+        if (cross_product < -1e-9) has_neg = true;
 
         // Point is outside if cross products have different signs (not including collinear)
         if (has_pos && has_neg) return false;
     }
-     // Check for collinear points (cross product is near zero for all edges)
-     // If all are near zero, check if point is within the bounds of the segment (simplified)
-     if (!has_pos && !has_neg) {
-          // This is a complex edge case for convex polygon check with collinear points
-          // For simplicity and robustness against floating point, treat near-zero as inside if no sign change occurred.
-          // A more thorough check for collinearity would verify the point is on the segment, but this often suffices.
-          // For this application, click tolerance handles near-edge cases, so strict inside is sufficient here.
-     }
 
     // Point is inside if no sign change or if all cross products are near zero (collinear case)
+    // For a convex polygon, if there's no sign change, the point is inside or on the boundary.
     return true;
 }
 
@@ -220,27 +215,30 @@ function getTextBounds(content, effectiveTextSize, fontRef) {
     }
 
     // Ensure the measurement buffer exists and is configured
-    if (!textMeasurePG) {
-        // If buffer is missing, return estimated bounds
+    if (!textMeasurePG || typeof textMeasurePG.textWidth !== 'function') {
+        // If buffer is missing or invalid, return estimated bounds
+        // console.warn("textMeasurePG missing or invalid, returning estimated bounds.");
          return { w: (content ? content.length : 1) * 0.6 * effectiveTextSize, h: effectiveTextSize * 1.2 };
     }
 
     try {
         // Apply font properties to the measurement buffer context
         // Use the font reference provided, or a default if none/invalid
-        if (fontRef && typeof textMeasurePG.textFont === 'function') {
-            textMeasurePG.textFont(fontRef);
+        // Check if fontRef is a p5.Font object before trying textFont(object)
+        if (fontRef && typeof fontRef === 'object' && typeof fontRef.textWidth === 'function' && typeof textMeasurePG.textFont === 'function') {
+            textMeasurePG.textFont(fontRef); // Use the p5.Font object
         } else if (typeof textMeasurePG.textFont === 'function') {
             textMeasurePG.textFont(baseFont); // Fallback to monospace string
         } else {
              // textFont method missing on buffer, return estimated bounds
+             // console.warn("textMeasurePG.textFont missing, returning estimated bounds.");
              return { w: (content ? content.length : 1) * 0.6 * effectiveTextSize, h: effectiveTextSize * 1.2 };
         }
 
-        if (typeof textMeasurePG.textSize !== 'function') return { w: (content ? content.length : 1) * 0.6 * effectiveTextSize, h: effectiveTextSize * 1.2 };
+        if (typeof textMeasurePG.textSize !== 'function') { /* console.warn("textMeasurePG.textSize missing"); */ return { w: (content ? content.length : 1) * 0.6 * effectiveTextSize, h: effectiveTextSize * 1.2 }; }
         textMeasurePG.textSize(effectiveTextSize);
 
-         if (typeof textMeasurePG.textAlign !== 'function') return { w: (content ? content.length : 1) * 0.6 * effectiveTextSize, h: effectiveTextSize * 1.2 };
+         if (typeof textMeasurePG.textAlign !== 'function') { /* console.warn("textMeasurePG.textAlign missing"); */ return { w: (content ? content.length : 1) * 0.6 * effectiveTextSize, h: effectiveTextSize * 1.2 }; }
         textMeasurePG.textAlign(CENTER, CENTER);
 
 
@@ -255,6 +253,7 @@ function getTextBounds(content, effectiveTextSize, fontRef) {
 
         // Basic sanity check for calculated dimensions
         if (isNaN(textW) || isNaN(textH) || textW < 0 || textH < 0) {
+            // console.warn("getTextBounds returned invalid dimensions:", textW, textH);
             // Return estimated bounds if measurement results are invalid
             return { w: (content ? content.length : 0.5) * 0.6 * effectiveTextSize, h: effectiveTextSize * 1.2 };
         }
@@ -263,6 +262,7 @@ function getTextBounds(content, effectiveTextSize, fontRef) {
 
     } catch (e) {
         // Catch any other errors during measurement, return estimated bounds
+         console.error("Error in getTextBounds:", e);
          return { w: (content ? content.length : 0.5) * 0.6 * effectiveTextSize, h: effectiveTextSize * 1.2 };
     }
 }
@@ -289,7 +289,7 @@ class FloatingShape {
         let roughMaxDimension = this.calculateMaxEffectiveDimension();
         let offScreenOffset = max(roughMaxDimension / 2 * this.scaleFactor, 100) + 50; // Add buffer
 
-        let minSpeed = 0.8, maxSpeed = 1.8; // Slightly slower floating speeds
+        let minSpeed = 0.8, maxSpeed = 1.8; // Floating speeds
 
         switch (edge) {
             case 0: // Top
@@ -322,8 +322,8 @@ class FloatingShape {
         this.rotationSpeed = random(-0.002, 0.002);
 
         let pickedColor;
-        // Modify random selection logic slightly to prioritize shapes if text fonts fail
-        this.type = (usableFonts.length > 0 || random() < 0.3) ? 'text' : 'shape'; // Bias towards text if fonts loaded, otherwise more shapes
+        // Bias towards text if fonts loaded, otherwise more shapes
+        this.type = (usableFonts.length > 0 && random() < 0.7) ? 'text' : 'shape'; // Increased bias for text if fonts available
 
         if (this.type === 'text') {
             let attempts = 0;
@@ -422,7 +422,7 @@ class FloatingShape {
             let duration = 45; // Animation duration in frames
             if (elapsed <= duration) {
                 let t = map(elapsed, 0, duration, 0, 1);
-                let easedT = 1 - pow(1 - t, 3); // Ease out effect (or use t*t*(3-2*t) cubic easing)
+                let easedT = 1 - pow(1 - t, 3); // Ease out effect
                 let pulseScale = 1 + sin(easedT * PI) * 0.08; // Pulse effect peaking mid-animation
                 this.tempScaleEffect = pulseScale;
             } else {
@@ -457,15 +457,14 @@ class FloatingShape {
 
         // Apply scale including any temporary effects (like landing animation)
         let currentDisplayScale = this.scaleFactor * (!this.isGrabbed && this.isPlacing ? this.tempScaleEffect : 1);
-         if (currentDisplayScale <= 0 || isNaN(currentDisplayScale)) currentDisplayScale = 1; // Sanity check scale
+         if (currentDisplayScale <= 0 || isNaN(currentDisplayScale)) currentDisplayScale = 1e-6; // Ensure scale is positive and not NaN
         graphics.scale(currentDisplayScale);
 
 
         // Draw grabbed effect (outline) if requested and on the main canvas
         if (showGrabEffect && graphics === this) {
-             // Ensure stroke properties don't interfere with the fill drawing below
-             graphics.push();
-             graphics.drawingContext.shadowBlur = 30; // Slightly softer shadow
+             graphics.push(); // Save graphics state before drawing outline
+             graphics.drawingContext.shadowBlur = 30; // Softer shadow
              graphics.drawingContext.shadowColor = 'rgba(255, 255, 255, 0.7)'; // Semi-transparent white glow
              graphics.stroke(255, 255, 255, 180); // Visible white stroke
              graphics.strokeWeight(4);
@@ -473,7 +472,7 @@ class FloatingShape {
              // Draw the outline using the same primitive drawing logic
              this.drawShapePrimitive(graphics, 0, 0, this.size, this.shapeType, this.type === 'text', this.textScaleAdjust);
              graphics.drawingContext.shadowBlur = 0; // Reset shadow
-             graphics.pop(); // Restore previous stroke/fill settings
+             graphics.pop(); // Restore stroke/fill settings
         }
 
         // Set fill and stroke for the main shape/text drawing
@@ -490,64 +489,46 @@ class FloatingShape {
     // Assumes transformations (translate, rotate, scale) are already applied to the 'graphics' context.
     // This function uses methods provided by the graphics context (e.g., graphics.rect, graphics.text).
     drawShapePrimitive(graphics, px, py, psize, pshapeType, isText = false, textScaleAdjust = 0.2) {
-        // Robustness checks
-        if (typeof graphics.beginShape !== 'function' || typeof graphics.vertex !== 'function') {
-             // console.warn("Graphics context missing shape drawing functions (beginShape/vertex)"); // Debugging
-             return;
-         }
-         if (isText && typeof graphics.text !== 'function') {
-              // console.warn("Graphics context missing text drawing function"); // Debugging
-              return;
-         }
-
-        // Check size sanity for shapes
-        if (!isText && (isNaN(psize) || psize <= 0)) {
-             // console.warn("Invalid size for shape primitive:", psize); // Debugging
-             return;
+        // Robustness checks - ensure necessary drawing functions exist on the graphics context
+        if (isText) {
+             if (typeof graphics.text !== 'function' || typeof graphics.textFont !== 'function' || typeof graphics.textSize !== 'function' || typeof graphics.textAlign !== 'function') {
+                 // console.warn("Graphics context missing text drawing functions."); // Debugging
+                 return;
+             }
+        } else { // Shape
+             if (typeof graphics.beginShape !== 'function' || typeof graphics.vertex !== 'function' || typeof graphics.endShape !== 'function') {
+                 // console.warn("Graphics context missing shape drawing functions."); // Debugging
+                 return;
+             }
+             // Check size sanity for shapes
+             if (isNaN(psize) || psize <= 0) {
+                  // console.warn("Invalid size for shape primitive:", psize); // Debugging
+                  return;
+             }
         }
+
 
         if (isText) {
             // Apply text properties to the provided graphics context
             let itemFont = this.font;
             // Use the assigned font object if it exists, otherwise fallback to baseFont string
-            if (itemFont && typeof graphics.textFont === 'function') {
+             // Check if itemFont is a valid p5.Font object (truthy) before using textFont(object)
+            if (itemFont && typeof itemFont === 'object' && typeof itemFont.textWidth === 'function') {
                 graphics.textFont(itemFont); // Use the p5.Font object
-            } else if (typeof graphics.textFont === 'function') {
-                graphics.textFont(baseFont); // Fallback string
             } else {
-                 // textFont method missing, text drawing might fail
-                 // console.warn("textFont method missing on graphics context"); // Debugging
-                 if (typeof graphics.text === 'function') {
-                      // Draw with default font if textFont failed
-                      graphics.text(this.content, px, py);
-                 }
-                 return;
+                graphics.textFont(baseFont); // Fallback string
             }
 
-            if (typeof graphics.textAlign === 'function') {
-                graphics.textAlign(CENTER, CENTER);
-            } else {
-                 // textAlign method missing, text positioning might be off
-                 // console.warn("textAlign method missing on graphics context"); // Debugging
-            }
+            graphics.textAlign(CENTER, CENTER);
 
             let effectiveTextSize = psize * textScaleAdjust;
             effectiveTextSize = max(effectiveTextSize, 1); // Ensure minimal size
              if (effectiveTextSize === Infinity || isNaN(effectiveTextSize)) effectiveTextSize = 16; // Sanity check size
 
-            if (typeof graphics.textSize === 'function') {
-                graphics.textSize(effectiveTextSize);
-            } else {
-                 // textSize method missing, text size might be off
-                 // console.warn("textSize method missing on graphics context"); // Debugging
-            }
+            graphics.textSize(effectiveTextSize);
 
-            if (typeof graphics.text === 'function') {
-                graphics.text(this.content, px, py); // Draw text centered at px, py
-            } else {
-                 // text method missing, cannot draw text
-                 // console.warn("text method missing on graphics context"); // Debugging
-            }
+            graphics.text(this.content, px, py); // Draw text centered at px, py
+
 
         } else { // It's a shape
             // Get vertices for the specific shape type based on psize
@@ -565,7 +546,7 @@ class FloatingShape {
 
             // Check if we got valid vertices
             if (!Array.isArray(vertices) || vertices.length < 3) {
-                 // console.warn("Not enough vertices for shape:", pshapeType, vertices); // Debugging
+                 // console.warn("Not enough vertices for shape:", pshapeType, vertices ? vertices.length : 0); // Debugging
                  return; // Need at least 3 vertices to form a polygon
             }
 
@@ -617,7 +598,7 @@ class FloatingShape {
               }
             // Get text bounds using the specific font if available
             let textBounds = getTextBounds(this.content, effectiveTextSize, this.font || baseFont);
-             if (textBounds.w <= 0 || textBounds.h <= 0) return false; // Cannot be over text with invalid bounds
+             if (textBounds.w <= 0 || textBounds.h <= 0 || isNaN(textBounds.w) || isNaN(textBounds.h)) return false; // Cannot be over text with invalid bounds
 
             // Check if local mouse is inside or near the text bounding box (centered at 0,0)
             return isPointInAxisAlignedRect(localMx, localMy, textBounds.w, textBounds.h, localTolerance);
@@ -652,6 +633,7 @@ class FloatingShape {
             if (!Array.isArray(collisionVertices) || collisionVertices.length < 3) {
                  return false; // Cannot check collision for invalid polygon
             }
+            // Check strict inside *or* near edge
             if (isPointInConvexPolygon(localMx, localMy, collisionVertices)) return true;
             return isPointNearPolygonEdge(localMx, localMy, collisionVertices, localTolerance);
         }
@@ -694,9 +676,7 @@ let initialPositioningDone = false; // Flag to do initial DOM positioning once
 function setup() {
     createCanvas(windowWidth, windowHeight);
     if (width <= 0 || height <= 0) {
-        // Handle case where canvas creation might fail (e.g., zero dimensions)
         console.error("Canvas size is invalid:", width, "x", height);
-        // Potentially halt execution or show an error message
         return; // Exit setup if canvas is bad
     }
 
@@ -724,9 +704,7 @@ function setup() {
           // textMeasurePG already exists and seems valid, ensure font is set if needed
           if (usableFonts.length > 0 && typeof textMeasurePG.textFont === 'function') {
               // Optionally update font if first usable font changed, though less critical for measurement
-              // textMeasurePG.textFont(usableFonts[0]);
            } else if (baseFont && typeof textMeasurePG.textFont === 'function') {
-                // textMeasurePG.textFont(baseFont);
            }
           // console.log("textMeasurePG already initialized in setup"); // Debugging
      }
@@ -734,14 +712,14 @@ function setup() {
 
     // --- Filter usable fonts after they are loaded in preload ---
     // This array will be used by both reset() and addNewTextShapeFromInput()
-    // Check for truthiness to ensure loadFont succeeded
+    // Check for truthiness and basic font properties
     usableFonts = [
         fontBangersRegular, fontBoogalooRegular, fontBreeSerifRegular, fontCaveatBrushRegular,
         fontCherryBombOneRegular, fontCinzelDecorativeBlack, fontCinzelDecorativeBold,
         fontCinzelDecorativeRegular, fontDynaPuffBold, fontDynaPuffMedium, fontDynaPuffRegular,
         fontInterBold, fontInterRegular, fontPixelifySansRegular, fontSenBold, fontSenMedium,
         fontSenRegular, fontShareTechMonoRegular, fontVT323Regular
-    ].filter(f => f && typeof f.textWidth === 'function'); // Filter for truthy p5.Font objects
+    ].filter(f => f && typeof f === 'object' && typeof f.textWidth === 'function'); // Filter for valid p5.Font objects
 
     // console.log("Usable fonts after filtering:", usableFonts.length); // Debugging
 
@@ -754,13 +732,12 @@ function setup() {
         .style("border", "1px solid #ccc")
         .style("border-radius", "15px")
         .style("outline", "none")
-        .style("background-color", color(255, 255, 255, 200))
+        .style("background-color", "rgba(255, 255, 255, 0.8)") // Slightly more transparent header elements
         .style("font-size", "14px")
         .style("color", color(50))
         .style("box-sizing", "border-box"); // Include padding/border in element's total width
     // Add event listener for 'Enter' key to add text
     inputElement.elt.addEventListener('keypress', function(event) {
-        // Check if the focused element is the input element
         if (event.key === 'Enter' && document.activeElement === this) {
             addNewTextShapeFromInput();
             event.preventDefault(); // Prevent default form submission behavior
@@ -769,7 +746,7 @@ function setup() {
 
     savePNGButton = createButton("SAVE PNG");
     saveHighResPNGButton = createButton("SAVE HI-RES PNG");
-    savePDFButton = createButton("SAVE PDF");
+    // savePDFButton = createButton("SAVE PDF"); // REMOVED
     clearButton = createButton("CLEAR");
     refreshButton = createButton("REFRESH");
 
@@ -777,7 +754,7 @@ function setup() {
         padding: "5px 10px",
         border: "1px solid #888",
         "border-radius": "15px",
-        "background-color": "rgba(200, 200, 200, 0.7)",
+        "background-color": "rgba(200, 200, 200, 0.7)", // Slightly more transparent header elements
         color: "rgb(50, 50, 50)",
         outline: "none",
         cursor: "pointer",
@@ -786,7 +763,7 @@ function setup() {
     };
 
     // Apply styles and add event listeners to buttons
-    [savePNGButton, saveHighResPNGButton, savePDFButton, clearButton, refreshButton].forEach(btn => {
+    [savePNGButton, saveHighResPNGButton, clearButton, refreshButton].forEach(btn => { // REMOVED savePDFButton
         if (btn) {
             Object.keys(baseButtonStyle).forEach(styleKey => {
                 btn.style(styleKey, baseButtonStyle[styleKey]);
@@ -800,7 +777,7 @@ function setup() {
     // Assign button actions
     if (savePNGButton) savePNGButton.elt.addEventListener('click', saveCanvasAreaAsPNG);
     if (saveHighResPNGButton) saveHighResPNGButton.elt.addEventListener('click', saveCanvasAreaAsHighResPNG);
-    if (savePDFButton) savePDFButton.elt.addEventListener('click', saveCanvasAreaAsPDF);
+    // if(savePDFButton) savePDFButton.elt.addEventListener('click', saveCanvasAreaAsPDF); // REMOVED
     if (clearButton) clearButton.elt.addEventListener('click', restartAll);
     if (refreshButton) refreshButton.elt.addEventListener('click', resetRandom);
 
@@ -1038,9 +1015,9 @@ function positionDOMElementsAndCanvasPG() {
     if (inputElement) {
         inputElement.position(CANVAS_AREA_X, headerCenterY - inputHeight / 2);
         // Calculate max width for input - up to the start of the buttons
-        let buttonBlockEstimatedWidth = 0;
-        let tempButtonArray = [refreshButton, clearButton, savePNGButton, saveHighResPNGButton, savePDFButton].filter(btn => btn !== null);
-        buttonBlockEstimatedWidth = tempButtonArray.reduce((sum, btn) => sum + btnOuterWidth(btn), 0) + (tempButtonArray.length > 1 ? (tempButtonArray.length - 1) * buttonSpacing : 0);
+        // Get widths of visible buttons (excluding PDF)
+        let visibleButtons = [refreshButton, clearButton, savePNGButton, saveHighResPNGButton].filter(btn => btn !== null);
+        let buttonBlockEstimatedWidth = visibleButtons.reduce((sum, btn) => sum + btnOuterWidth(btn), 0) + (visibleButtons.length > 1 ? (visibleButtons.length - 1) * buttonSpacing : 0);
 
         let maxInputWidth = width - rightMargin - buttonBlockEstimatedWidth - CANVAS_AREA_X - 20; // 20px buffer
         maxInputWidth = max(100, maxInputWidth); // Minimum width for input
@@ -1052,8 +1029,8 @@ function positionDOMElementsAndCanvasPG() {
     let buttonHeight = (savePNGButton ? savePNGButton.elt.offsetHeight || 30 : HEADER_HEIGHT / 4); // Use one button's height or estimate
     let buttonPadY = headerCenterY - buttonHeight / 2;
 
-    // Position buttons from right to left
-    if (savePDFButton) { currentButtonX -= btnOuterWidth(savePDFButton); savePDFButton.position(currentButtonX, buttonPadY); currentButtonX -= buttonSpacing; }
+    // Position buttons from right to left (Excluding PDF)
+    // if (savePDFButton) { currentButtonX -= btnOuterWidth(savePDFButton); savePDFButton.position(currentButtonX, buttonPadY); currentButtonX -= buttonSpacing; } // REMOVED
     if (saveHighResPNGButton) { currentButtonX -= btnOuterWidth(saveHighResPNGButton); saveHighResPNGButton.position(currentButtonX, buttonPadY); currentButtonX -= buttonSpacing; }
     if (savePNGButton) { currentButtonX -= btnOuterWidth(savePNGButton); savePNGButton.position(currentButtonX, buttonPadY); currentButtonX -= buttonSpacing; }
     if (clearButton) { currentButtonX -= btnOuterWidth(clearButton); clearButton.position(currentButtonX, buttonPadY); currentButtonX -= buttonSpacing; }
@@ -1085,9 +1062,7 @@ function mousePressed() {
              if (grabbedItem.type === 'text') inputElement.elt.focus(); // Refocus input
              return false; // Prevent further processing
         } else {
-             // Clicked elsewhere while grabbed item exists - do nothing or could drop?
-             // Current logic is to ignore clicks elsewhere while grabbed
-             return false; // Prevent further processing
+             return false; // Ignore clicks elsewhere while grabbed
         }
     }
 
@@ -1125,7 +1100,7 @@ function mousePressed() {
     // If no placed item was clicked, check for floating shapes outside the canvas area
     // Iterate shapes in reverse order (grabbed item is usually last, but check all non-grabbed)
     for (let i = shapes.length - 1; i >= 0; i--) {
-        // Only consider shapes that are not currently grabbed (shouldn't happen due to logic, but safe)
+        // Only consider shapes that are not currently grabbed
         if (!shapes[i].isGrabbed) {
             if (shapes[i].isMouseOver(mouseX, mouseY)) {
                 grabbedItem = shapes[i];
@@ -1133,28 +1108,25 @@ function mousePressed() {
                 grabbedItem.isPlacing = false; // Stop any animation
                 grabbedItem.solidify(); // Stop its movement
 
-                // Move the grabbed item to the end of the shapes array (optional, but keeps grabbed item on top visually if drawn in a single loop)
-                // This splice/push logic is already done above when moving placed items. For floating shapes,
-                // the item is already in `shapes`. We could just move it to the end:
+                // Move the grabbed item to the end of the shapes array
                  let temp = shapes.splice(i, 1)[0];
                  shapes.push(temp); // Move to end
 
                 // Set input value if it's a text item
                 if (grabbedItem.type === 'text') {
-                    inputElement.value(grabbedItem.content || '');
-                    inputElement.attribute('placeholder', ''); // Clear placeholder
-                    inputElement.elt.focus(); // Focus input
-                } else {
-                     // Clear input for shape items
-                    inputElement.value('');
-                    inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-                    inputElement.elt.blur(); // Remove focus
-                }
-                // console.log("Grabbed floating item:", grabbedItem.type, grabbedItem.shapeType || grabbedItem.content); // Debugging
-                return false; // Prevent default behavior
-            }
-        }
-    }
+                     inputElement.value(grabbedItem.content || '');
+                     inputElement.attribute('placeholder', '');
+                     inputElement.elt.focus(); // Focus input
+                  } else {
+                      inputElement.value('');
+                     inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+                     inputElement.elt.blur(); // Remove focus
+                  }
+                  // console.log("Grabbed floating item:", grabbedItem.type, grabbedItem.shapeType || grabbedItem.content); // Debugging
+                  return false; // Prevent default behavior
+             }
+         }
+     }
 
     // If no item was grabbed, allow default behavior (e.g., clicking outside canvas area)
     return true;
@@ -1175,13 +1147,11 @@ function mouseReleased() {
                  if (content === "" || content === TEXT_OPTIONS[0].trim()) {
                       // If text is empty or placeholder, remove the item instead of placing
                       shapes = shapes.filter(s => s !== grabbedItem); // Remove from shapes
-                      // It was already removed from placedItems if it came from there, so no need to filter placedItems
-                      // The item is now effectively deleted.
-                      // console.log("Discarded empty text item on canvas area release."); // Debugging
                       grabbedItem = null; // Clear grabbed item
                       inputElement.value(''); // Clear input
                       inputElement.attribute('placeholder', TEXT_OPTIONS[0]); // Restore placeholder
                       inputElement.elt.blur(); // Remove focus
+                      // console.log("Discarded empty text item on canvas area release."); // Debugging
                       return; // Exit the function
                  } else {
                     grabbedItem.content = content; // Update content with final text
@@ -1253,11 +1223,12 @@ function doubleClicked() {
         for (let i = placedItems.length - 1; i >= 0; i--) {
             let item = placedItems[i];
             if (item.isMouseOver(mouseX, mouseY)) {
-                // Move the double-clicked item to the front of the placedItems array (brings to top layer)
-                let itemToSendToFront = placedItems.splice(i, 1)[0];
-                placedItems.push(itemToSendToFront); // Add to the end
-                itemToSendToFront.solidify(); // Ensure it remains solid
-                // console.log("Sent item to front:", itemToSendToFront.type, itemToSendToFront.shapeType || itemToSendToFront.content); // Debugging
+                // --- FIX: Move the double-clicked item to the *front* of the array (back layer) ---
+                let itemToSendToBack = placedItems.splice(i, 1)[0]; // Remove from current position
+                placedItems.unshift(itemToSendToBack); // Add to the beginning
+                // --- End FIX ---
+                itemToSendToBack.solidify(); // Ensure it remains solid
+                // console.log("Sent item to back:", itemToSendToBack.type, itemToSendToBack.shapeType || itemToSendToBack.content); // Debugging
                 return false; // Prevent default browser behavior
             }
         }
@@ -1283,7 +1254,6 @@ function mouseWheel(event) {
                   return false; // Prevent default page scroll
               }
          }
-         // If no item under mouse in canvas area, default scroll is fine? Or prevent?
          // Preventing scroll over empty canvas area feels more intuitive
          return false; // Prevent default page scroll
     }
@@ -1299,14 +1269,12 @@ function keyPressed() {
         // Allow ESC key to blur the input and ungrab item if text
         if (keyCode === ESCAPE && grabbedItem && grabbedItem.type === 'text') {
              inputElement.elt.blur();
-             // Optionally ungrab the item here? Or handle in mouseReleased on blur?
-             // Let's handle ungrabbing on mouseRelease (implicit or explicit)
              return false; // Prevent default ESC behavior
         }
         return true; // Allow typing in input
     }
 
-    // If focus is on the main canvas body or canvas element itself
+    // If focus is on the main p5 canvas (or body if nothing specific is focused)
     if (document.activeElement === document.body || document.activeElement === canvas.elt) {
          // If grabbed item exists, handle scale and delete keys
          if (grabbedItem) {
@@ -1357,7 +1325,6 @@ function addNewTextShapeFromInput() {
         // Provide visual feedback for invalid input
         inputElement.style("border-color", "red");
         setTimeout(() => inputElement.style("border-color", "#ccc"), 500); // Revert color after delay
-        // Keep invalid text in the input or clear? Let's clear.
         inputElement.value('');
         inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
         inputElement.elt.focus(); // Keep focus on input
@@ -1614,11 +1581,12 @@ function saveCanvasAreaAsHighResPNG() {
             itemTextScale = max(itemTextScale, 1e-3); // Ensure text scale adjust is positive
 
              // Set the font on the high-res buffer context
-            if (itemFont && typeof highResPG.textFont === 'function') {
+             // Check if itemFont is a valid p5.Font object (truthy) before using it
+            if (itemFont && typeof itemFont === 'object' && typeof itemFont.textWidth === 'function' && typeof highResPG.textFont === 'function') {
                 highResPG.textFont(itemFont); // Use the p5.Font object
             } else if (typeof highResPG.textFont === 'function') {
                  // Fallback on highResPG if the specific item font is bad
-                 if (usableFonts.length > 0) highResPG.textFont(usableFonts[0]); // Use first usable if available
+                 if (usableFonts.length > 0 && typeof usableFonts[0].textWidth === 'function') highResPG.textFont(usableFonts[0]); // Use first usable if available
                  else highResPG.textFont(baseFont); // Fallback string
             }
              // textAlign is set inside drawShapePrimitive for text
@@ -1672,127 +1640,7 @@ function saveCanvasAreaAsHighResPNG() {
     }
 }
 
-
-// Saves the central canvas area content as a PDF.
-function saveCanvasAreaAsPDF() {
-    // Check if the p5.pdf library is loaded and accessible
-    if (typeof p5 === 'undefined' || !p5.prototype || typeof p5.prototype.createPDF !== 'function') {
-        alert("Error: PDF library not loaded or initialized correctly. Please ensure 'p5.pdf.js' is included AFTER 'p5.js' in your index.html.");
-        console.error("p5.prototype or createPDF function missing."); // Debugging
-        return;
-    }
-    if (CANVAS_AREA_W <= 0 || CANVAS_AREA_H <= 0 || isNaN(CANVAS_AREA_W) || isNaN(CANVAS_AREA_H)) {
-         alert("Error: Cannot save PDF. Canvas area dimensions are invalid.");
-         console.error("CANVAS_AREA_W/H invalid:", CANVAS_AREA_W, CANVAS_AREA_H); // Debugging
-         return;
-    }
-
-
-    let pdf = null;
-    try {
-        // Create a PDF recording context tied to the current p5 instance
-        // Pass canvas dimensions as page size for the PDF
-        pdf = p5.prototype.createPDF(this, {
-            filename: 'myArtboard_pdf_' + generateTimestampString() + '.pdf',
-            size: [CANVAS_AREA_W, CANVAS_AREA_H], // Set page size to match canvas area
-            margin: { top: 0, right: 0, bottom: 0, left: 0 } // No margins
-        });
-
-        // Check if PDF context was created successfully
-        if (!pdf || typeof pdf.beginRecord !== 'function' || typeof pdf.endRecord !== 'function' || typeof pdf.save !== 'function') {
-            if (pdf && typeof pdf.remove === 'function') { try { pdf.remove(); } catch (e) { /* ignore */ } }
-            pdf = null;
-            alert("Error creating PDF instance. PDF library might be corrupted or incompatible.");
-            console.error("PDF context creation failed."); // Debugging
-            return;
-        }
-
-        pdf.beginRecord(); // Start recording drawing commands for the PDF
-
-        // Draw the white background for the artboard area in the PDF (coordinates are 0,0 to CANVAS_AREA_W,H)
-        pdf.fill(255);
-        pdf.noStroke();
-        pdf.rect(0, 0, CANVAS_AREA_W, CANVAS_AREA_H);
-
-
-        // Iterate through placed items and draw them onto the PDF context
-        for (let i = 0; i < placedItems.length; i++) {
-            let item = placedItems[i];
-
-            // Skip drawing empty text items
-            if (item.type === 'text' && (!item.content || item.content.trim() === "" || item.content.trim() === TEXT_OPTIONS[0].trim())) {
-                continue;
-            }
-             // Skip drawing items with invalid size/scale
-             if (item.scaleFactor <= 0 || item.size <= 0 || isNaN(item.scaleFactor) || isNaN(item.size)) continue;
-
-
-            pdf.push(); // Save the current PDF graphics state
-
-            // Translate to the item's position relative to the PDF page origin (0,0)
-            // Item positions (item.x, item.y) are global window coordinates.
-            // We need to draw them relative to the canvas area's top-left corner (CANVAS_AREA_X, CANVAS_AREA_Y).
-            pdf.translate(item.x - CANVAS_AREA_X, item.y - CANVAS_AREA_Y);
-            pdf.rotate(item.rotation); // Apply item's rotation
-
-            // Apply the item's scale factor
-            let currentScale = item.scaleFactor;
-             if (currentScale <= 0 || isNaN(currentScale)) currentScale = 1e-6; // Ensure scale is positive
-            pdf.scale(currentScale);
-
-
-            // Set fill and stroke properties for the item
-            pdf.fill(item.color);
-            pdf.noStroke();
-
-             // Prepare font and text size for text items on the PDF context
-             let itemFont = item.font;
-             let itemTextScale = isNaN(item.textScaleAdjust) ? 0.2 : item.textScaleAdjust;
-             itemTextScale = max(itemTextScale, 1e-3); // Ensure text scale adjust is positive
-
-             // Set the font on the PDF context
-             // Check if itemFont is a valid p5.Font object (truthy) AND has the fontName property used by p5.pdf
-             if (itemFont && typeof itemFont.fontName === 'string' && typeof pdf.textFont === 'function') {
-                  pdf.textFont(itemFont); // Use the p5.Font object
-             } else if (typeof pdf.textFont === 'function') {
-                  // Fallback on PDF if the specific item font is bad or not PDF-compatible
-                  if (usableFonts.length > 0 && typeof usableFonts[0].fontName === 'string') pdf.textFont(usableFonts[0]); // Use first usable PDF-compatible font if available
-                  else pdf.textFont(baseFont); // Fallback string
-             }
-             // textAlign is set inside drawShapePrimitive for text
-
-            // Draw the item's primitive shape or text using the PDF context
-            item.drawShapePrimitive(pdf, 0, 0, item.size, item.shapeType, item.type === 'text', itemTextScale);
-
-            pdf.pop(); // Restore the previous PDF graphics state
-        }
-
-        // Draw border around the canvas area content in the PDF
-        pdf.push();
-        pdf.stroke(0); // Black border
-        pdf.strokeWeight(1); // Standard weight
-        pdf.noFill();
-        pdf.rect(0, 0, CANVAS_AREA_W, CANVAS_AREA_H); // Border matches page size
-        pdf.pop();
-
-
-        pdf.endRecord(); // Stop recording drawing commands
-
-        // Save the PDF file
-        pdf.save();
-         // console.log("Generated PDF."); // Debugging
-
-    } catch (e) {
-        console.error("Error during PDF save:", e);
-        alert("Error generating PDF. Check browser console for technical details.");
-        // Attempt to gracefully end recording if it was started
-        if (pdf && typeof pdf.isRecording === 'boolean' && pdf.isRecording && typeof pdf.endRecord === 'function') {
-            try { pdf.endRecord(); } catch (endErr) { /* ignore */ }
-        }
-        // Ensure the PDF context is removed to free resources
-        if (pdf && typeof pdf.remove === 'function') { try { pdf.remove(); } catch (remErr) { /* ignore */ } }
-    }
-}
+// saveCanvasAreaAsPDF function REMOVED
 
 // Resets the floating shapes to a new random set.
 function resetRandom() {
@@ -1856,17 +1704,16 @@ function touchStarted(event) {
 
     // Ignore touches in the header area
     if (touchY < HEADER_HEIGHT) {
-        // Prevent default browser behavior if the touch is within the header
-         if (event.cancelable) event.preventDefault();
+         if (event.cancelable) event.preventDefault(); // Prevent default browser behavior
         return true; // Allow UI interaction
     }
 
-    // Check for double tap to send item to front
+    // Check for double tap to send item to back
     let currentTime = millis();
     let tapDelay = currentTime - lastTapTime;
-    lastTapTime = currentTime;
+    lastTapTime = currentTime; // Update last tap time
 
-    if (tapDelay < 250 && tapDelay > 50) { // Check for a tap within double-tap time window
+    if (tapDelay < 250 && tapDelay > 50) { // Check for a tap within double-tap time window (50ms to 250ms)
          // Perform double-click logic for the touch coordinates
          let doubleTapHandled = false;
          if (isMouseOverCanvasArea(touchX, touchY)) {
@@ -1874,9 +1721,11 @@ function touchStarted(event) {
                  let item = placedItems[i];
                  // Use isMouseOver with touch coordinates
                  if (item.isMouseOver(touchX, touchY)) {
-                     let itemToSendToFront = placedItems.splice(i, 1)[0];
-                     placedItems.push(itemToSendToFront); // Move to end (top)
-                     itemToSendToFront.solidify(); // Ensure it stays placed
+                      // --- FIX: Move the double-tapped item to the *front* of the array (back layer) ---
+                     let itemToSendToBack = placedItems.splice(i, 1)[0]; // Remove from current position
+                     placedItems.unshift(itemToSendToBack); // Add to the beginning
+                     // --- End FIX ---
+                     itemToSendToBack.solidify(); // Ensure it stays placed
                      doubleTapHandled = true;
                      // console.log("Double tapped placed item."); // Debugging
                      break; // Found and handled double tap, exit loop
@@ -1884,12 +1733,13 @@ function touchStarted(event) {
              }
          }
          if (doubleTapHandled) {
-              if (event.cancelable) event.preventDefault(); // Prevent default browser action (like zoom)
+              // Prevent default browser action (like zoom) only if a placed item was double-tapped
+              if (event.cancelable) event.preventDefault();
               return false; // Double tap handled, stop processing
          }
-         // If double tap detected but didn't hit a placed item, might still prevent default zoom/scroll
-          if (event.cancelable) event.preventDefault();
-          return false;
+         // If double tap detected but didn't hit a placed item, still potentially prevent default zoom/scroll on some devices
+         // Let's rely on the general preventDefault at the end if needed, or let it fall through.
+         // Letting it fall through seems safer to allow other touch interactions.
     }
 
 
@@ -1902,7 +1752,14 @@ function touchStarted(event) {
         } else {
              // Touch started elsewhere while an item is grabbed - ignore or potentially drop?
              // Ignoring seems safer for now.
-             if (event.cancelable) event.preventDefault();
+             // Prevent default if the touch is within the canvas area or on a shape
+             if (touchY >= HEADER_HEIGHT) { // Below header
+                // Check if touch is on *any* shape (even if not grabbed) or within the canvas area
+                let isOverAnyShape = shapes.some(s => s.isMouseOver(touchX, touchY)) || placedItems.some(p => p.isMouseOver(touchX, touchY));
+                if (isOverAnyShape || isMouseOverCanvasArea(touchX, touchY)) {
+                     if (event.cancelable) event.preventDefault();
+                }
+             }
             return false; // Touch handled (ignored)
         }
     }
@@ -1968,13 +1825,12 @@ function touchStarted(event) {
         }
     }
 
-    // If no item was touched, allow default browser behavior (e.g., scrolling outside header/canvas)
-    // We might want to prevent default even here to avoid zoom/scroll interference on initial touch
-    // Let's prevent default if the touch is within the main p5 canvas area below the header.
+    // If no item was touched, prevent default behavior (e.g., scrolling outside header/canvas)
+     // Prevent default if the touch is anywhere below the header.
      if (touchY >= HEADER_HEIGHT) {
-          if (event.cancelable) event.preventDefault();
+         if (event.cancelable) event.preventDefault();
      }
-    return true;
+    return true; // Allow other potential handlers to run if needed
 }
 
 function touchMoved(event) {
@@ -1992,8 +1848,12 @@ function touchMoved(event) {
              if (event.cancelable) event.preventDefault(); // Prevent default browser behavior (scrolling, zoom)
             return false; // Touch move handled
         }
+    } else if (touches.length > 0 && touches[0].y >= HEADER_HEIGHT) {
+        // Prevent default scroll/zoom if touch starts below the header, even if no item is grabbed
+         if (event.cancelable) event.preventDefault();
+          return false; // Indicate touch was within interactive area
     }
-    // Allow default browser behavior if not actively dragging an item
+    // Allow default browser behavior otherwise
     return true;
 }
 
@@ -2007,9 +1867,20 @@ function touchEnded(event) {
          if (event.cancelable) event.preventDefault(); // Prevent default browser behavior (e.g., click after tap)
         return false; // Touch end handled
     }
+
     // Allow default browser behavior if no item was grabbed by touch
+    // Note: Double-tap handling already consumes the touchStarted and potentially prevents default.
+    // Regular taps will proceed here after touchStarted. We might want to prevent default
+    // on a single tap as well if it's below the header to avoid tap-to-zoom or other issues.
+     if (touches.length > 0 && touches[0].y >= HEADER_HEIGHT) {
+         // We need to be careful not to break actual clicks on DOM elements.
+         // Since our touchStarted already prevents default for taps on shapes/canvas area,
+         // this might not be strictly necessary here, but let's add it defensively
+         // if event wasn't already consumed and it's below the header.
+         // The p5 touch handlers manage preventDefault automatically if they return false.
+         // The key is ensuring touchStarted/touchMoved returned false when active.
+         // If touchStarted fell through, this touchEnded will also fall through.
+     }
+
     return true;
 }
-
-// Note: The duplicate isMouseOverCanvasArea function at the very end of the original file is removed.
-// The first definition near the top is the one used.

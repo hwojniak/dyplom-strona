@@ -19,7 +19,12 @@
             overflow: hidden; /* Hide scrollbars if canvas is larger than window */
             background-color: #000; /* Match your sketch background */
         }
-        /* You can add more CSS here for styling UI elements if you moved them out of p5 */
+        /* Style for p5 buttons/input created by p5.js if needed */
+        button, input[type="text"] {
+             /* Ensure these elements are positioned by p5.js and don't interfere with layout */
+             position: absolute; /* p5.js position() uses absolute */
+             z-index: 10; /* Ensure they are above the canvas */
+        }
     </style>
 
 	<script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.js"></script>
@@ -27,8 +32,8 @@
     <!-- ... sketch.js script ... -->
     <script src="sketch.js"></script>
 
-    <!-- **PDF library link** -->
-    <script src="p5.pdf.js"></script>
+    <!-- **PDF library link** - REMOVED -->
+    <!-- <script src="p5.pdf.js"></script> -->
 
 </body>
 </html>
