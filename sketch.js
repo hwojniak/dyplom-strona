@@ -1064,10 +1064,14 @@ function mousePressed() {
                (clearButton && event.target === clearButton.elt) ||
                (refreshButton && event.target === refreshButton.elt)) {
                 clickedOnHeaderDOM = true;
+                // Add this: Focus canvas after button click
+                if (canvas && canvas.elt && typeof canvas.elt.focus === 'function') {
+                    setTimeout(() => canvas.elt.focus(), 0);
+                }
             }
         }
         return clickedOnHeaderDOM; // Allow default if on a UI element, else consume
-     }
+    }
  
      if (grabbedItem) {
         if (grabbedItem.isMouseOver(mouseX, mouseY)) {
