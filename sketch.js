@@ -136,8 +136,17 @@ function distToSegment(px, py, x1, y1, x2, y2) {
 // Gets local vertices for unrotated polygon shapes centered at (0,0).
 function getTriangleVertices(size) {
      if (isNaN(size) || size <= 0) return [];
-    // Matching drawShapePrimitive's coordinates
-    return [{ x: 0, y: -size * 0.8 }, { x: -size * 0.8, y: size * 0.4 }, { x: size * 0.8, y: size * 0.4 }];
+    // For equilateral triangle, we'll use size as the height
+    // The height of an equilateral triangle is (√3/2) * side_length
+    // So side_length = (2/√3) * height
+    const height = size;
+    const sideLength = (2/Math.sqrt(3)) * height;
+    // Calculate vertices for equilateral triangle
+    return [
+        { x: 0, y: -height/2 },  // Top vertex
+        { x: -sideLength/2, y: height/2 },  // Bottom left
+        { x: sideLength/2, y: height/2 }   // Bottom right
+    ];
 }
 
 function getSquareVertices(size) {
@@ -547,9 +556,12 @@ class FloatingShape {
                case 'square': graphics.rect(px, py, psize, psize); break;
                case 'triangle':
                  graphics.beginShape();
-                 graphics.vertex(px, py - psize * 0.8);
-                 graphics.vertex(px - psize * 0.8, py + psize * 0.4);
-                 graphics.vertex(px + psize * 0.8, py + psize * 0.4);
+                 // Use the same vertices as getTriangleVertices
+                 const height = psize;
+                 const sideLength = (2/Math.sqrt(3)) * height;
+                 graphics.vertex(px, py - height/2);  // Top vertex
+                 graphics.vertex(px - sideLength/2, py + height/2);  // Bottom left
+                 graphics.vertex(px + sideLength/2, py + height/2);  // Bottom right
                  graphics.endShape(CLOSE);
                  break;
                case 'pentagon':
