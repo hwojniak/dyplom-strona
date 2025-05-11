@@ -1,3 +1,4 @@
+--- START OF FILE sketch.js ---
 // FIX: Efficiency issues significantly improved with canvasPG and textMeasurePG
 // This version addresses user-specific bugs and preferences for Step 1.
 
@@ -225,7 +226,6 @@ function getTextBounds(content, effectiveTextSize, baseFontRef) {
 
     // Ensure the measurement buffer exists and is configured
     if (!textMeasurePG) {
-        console.error("textMeasurePG is not initialized!");
         return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
     }
 
@@ -237,25 +237,23 @@ function getTextBounds(content, effectiveTextSize, baseFontRef) {
         } else if (textMeasurePG.textFont){
              textMeasurePG.textFont('monospace');
         } else {
-             console.error("textMeasurePG has no textFont method.");
               return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
         }
 
-        if (textMeasurePG.textSize) textMeasurePG.textSize(effectiveTextSize); else console.error("textMeasurePG has no textSize method.");
-        if (textMeasurePG.textAlign) textMeasurePG.textAlign(CENTER, CENTER); else console.error("textMeasurePG has no textAlign method.");
+        if (textMeasurePG.textSize) textMeasurePG.textSize(effectiveTextSize); else return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
+        if (textMeasurePG.textAlign) textMeasurePG.textAlign(CENTER, CENTER); else return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
 
         // Perform measurement using the persistent buffer
         let textW = 0, textAsc = 0, textDesc = 0;
 
-        if (textMeasurePG.textWidth) textW = textMeasurePG.textWidth(content); else console.error("textMeasurePG has no textWidth method.");
-         if (textMeasurePG.textAscent) textAsc = textMeasurePG.textAscent(); else console.error("textMeasurePG has no textAscent method.");
-         if (textMeasurePG.textDescent) textDesc = textMeasurePG.textDescent(); else console.error("textMeasurePG has no textDescent method.");
+        if (textMeasurePG.textWidth) textW = textMeasurePG.textWidth(content); else return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
+         if (textMeasurePG.textAscent) textAsc = textMeasurePG.textAscent(); else return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
+         if (textMeasurePG.textDescent) textDesc = textMeasurePG.textDescent(); else return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
 
         let textH = textAsc + textDesc; // Total height
 
         // Basic sanity check for calculated dimensions
          if (isNaN(textW) || isNaN(textH) || textW < 0 || textH < 0) {
-             console.warn("getTextBounds: Calculated bounds are invalid. Content:", content, "Size:", effectiveTextSize, "Bounds:", { w: textW, h: textH });
               textW = effectiveTextSize * (content ? content.length : 0.5) * 0.6;
               textH = effectiveTextSize * 1.2;
          }
@@ -263,7 +261,6 @@ function getTextBounds(content, effectiveTextSize, baseFontRef) {
         return { w: textW, h: textH };
 
     } catch (e) {
-        console.error("Error in getTextBounds using textMeasurePG:", e);
         return { w: effectiveTextSize * (content ? content.length : 0.5) * 0.6, h: effectiveTextSize * 1.2 };
     }
 }
@@ -308,7 +305,7 @@ class FloatingShape {
       case 2: // Bottom
         this.x = width * posAlong;
         this.y = height + offScreenOffset;
-        this.speedX = random(-1, 1) * maxSpeed * 0.5;
+        this.speedX = random(-1, -0.5) * maxSpeed * 0.5; // Slight bias left
         this.speedY = random(-maxSpeed, -minSpeed);
         break;
       case 3: // Left
@@ -480,14 +477,10 @@ class FloatingShape {
              // Ensure textFont method exists on the graphics context
              if (typeof graphics.textFont === 'function') {
                  graphics.textFont(this.font || baseFont);
-             } else {
-                 console.warn("Graphics context has no textFont method for text item:", this);
              }
 
               if (typeof graphics.textAlign === 'function') {
                  graphics.textAlign(CENTER, CENTER);
-              } else {
-                   console.warn("Graphics context has no textAlign method for text item:", this);
               }
 
              let effectiveTextSize = psize * textScaleAdjust;
@@ -496,22 +489,7 @@ class FloatingShape {
 
               if (typeof graphics.textSize === 'function') {
                  graphics.textSize(effectiveTextSize);
-              } else {
-                   console.warn("Graphics context has no textSize method for text item:", this);
               }
-
-             // --- START DEBUG: Font Drawing Parameters ---
-             // Uncomment these console.log lines if you are debugging font display
-             /*
-             console.log("Drawing text:", this.content,
-                         "Size:", psize,
-                         "Effective Size:", effectiveTextSize,
-                         "Font Object:", this.font, // Check the actual font object being used
-                         "Font Name/Style:", this.font ? (this.font.font || this.font) : 'N/A', // Try to log font name property
-                         "Position:", {px, py},
-                         "Graphics context:", graphics === this ? "Main Canvas" : "canvasPG");
-             */
-             // --- END DEBUG ---
 
              graphics.text(this.content, px, py); // Draw text centered at px, py
 
@@ -534,7 +512,7 @@ class FloatingShape {
                case 'pentagon':
                   graphics.beginShape();
                   let sidesP = 5; let radiusP = psize * 0.7;
-                  if (isNaN(radiusP) || radiusP <= 0) { console.warn("Invalid radiusP for pentagon", radiusP); break; }
+                  if (isNaN(radiusP) || radiusP <= 0) { break; }
                   for (let i = 0; i < sidesP; i++) {
                      let angle = TWO_PI / sidesP * i;
                      let sx = cos(angle - HALF_PI) * radiusP;
@@ -546,7 +524,7 @@ class FloatingShape {
                case 'hexagon':
                  graphics.beginShape();
                  let sidesH = 6; let radiusH = psize;
-                 if (isNaN(radiusH) || radiusH <= 0) { console.warn("Invalid radiusH for hexagon", radiusH); break; }
+                 if (isNaN(radiusH) || radiusH <= 0) { break; }
                  for (let i = 0; i < sidesH; i++) {
                     let angle = TWO_PI / sidesH * i;
                     let sx = cos(angle) * radiusH;
@@ -603,17 +581,17 @@ class FloatingShape {
                  return isPointInAxisAlignedRect(localMx, localMy, this.size, this.size, localTolerance);
               case 'triangle':
                   let triVertices = getTriangleVertices(this.size);
-                   if (!Array.isArray(triVertices) || triVertices.length < 3) { console.warn("Invalid triangle vertices."); return false; }
+                   if (!Array.isArray(triVertices) || triVertices.length < 3) { return false; }
                   if (isPointInConvexPolygon(localMx, localMy, triVertices)) return true;
                   return isPointNearPolygonEdge(localMx, localMy, triVertices, localTolerance);
               case 'pentagon':
                   let pentVertices = getPentagonVertices(this.size);
-                  if (!Array.isArray(pentVertices) || pentVertices.length < 5) { console.warn("Invalid pentagon vertices."); return false; }
+                  if (!Array.isArray(pentVertices) || pentVertices.length < 5) { return false; }
                   if (isPointInConvexPolygon(localMx, localMy, pentVertices)) return true;
                   return isPointNearPolygonEdge(localMx, localMy, pentVertices, localTolerance);
               case 'hexagon':
                    let hexVertices = getHexagonVertices(this.size);
-                   if (!Array.isArray(hexVertices) || hexVertices.length < 6) { console.warn("Invalid hexagon vertices."); return false; }
+                   if (!Array.isArray(hexVertices) || hexVertices.length < 6) { return false; }
                   if (isPointInConvexPolygon(localMx, localMy, hexVertices)) return true;
                   return isPointNearPolygonEdge(localMx, localMy, hexVertices, localTolerance);
               default:
@@ -630,39 +608,31 @@ function preload() {
    baseFont = 'monospace';
 
   // --- START: Load ALL specific fonts and logo ---
+  // Providing empty function callbacks to prevent TypeError
+  fontBangersRegular = loadFont('assets/Bangers-Regular.ttf', () => {}, (err) => {});
+  fontBoogalooRegular = loadFont('assets/Boogaloo-Regular.ttf', () => {}, (err) => {});
+  fontBreeSerifRegular = loadFont('assets/BreeSerif-Regular.ttf', () => {}, (err) => {});
+  fontCaveatBrushRegular = loadFont('assets/CaveatBrush-Regular.ttf', () => {}, (err) => {});
+  fontCherryBombOneRegular = loadFont('assets/CherryBombOne-Regular.ttf', () => {}, (err) => {});
+  fontCinzelDecorativeBlack = loadFont('assets/CinzelDecorative-Black.ttf', () => {}, (err) => {});
+  fontCinzelDecorativeBold = loadFont('assets/CinzelDecorative-Bold.ttf', () => {}, (err) => {});
+  fontCinzelDecorativeRegular = loadFont('assets/CinzelDecorative-Regular.ttf', () => {}, (err) => {});
+  fontDynaPuffBold = loadFont('assets/DynaPuff-Bold.ttf', () => {}, (err) => {});
+  fontDynaPuffMedium = loadFont('assets/DynaPuff-Medium.ttf', () => {}, (err) => {});
+  fontDynaPuffRegular = loadFont('assets/DynaPuff-Regular.ttf', () => {}, (err) => {});
+  fontInterBold = loadFont('assets/Inter-Bold.ttf', () => {}, (err) => {});
+  fontInterRegular = loadFont('assets/Inter-Regular.ttf', () => {}, (err) => {});
+  fontPixelifySansRegular = loadFont('assets/PixelifySans-Regular.ttf', () => {}, (err) => {});
+  fontSenBold = loadFont('assets/Sen-Bold.ttf', () => {}, (err) => {});
+  fontSenMedium = loadFont('assets/Sen-Medium.ttf', () => {}, (err) => {});
+  fontSenRegular = loadFont('assets/Sen-Regular.ttf', () => {}, (err) => {});
+  fontShareTechMonoRegular = loadFont('assets/ShareTechMono-Regular.ttf', () => {}, (err) => {});
+  fontVT323Regular = loadFont('assets/VT323-Regular.ttf', () => {}, (err) => {});
 
-  try {
-    fontBangersRegular = loadFont('assets/Bangers-Regular.ttf', () => { console.log("Font 'Bangers-Regular' loaded."); }, (err) => { console.error("Failed to load font 'Bangers-Regular':", err); });
-    fontBoogalooRegular = loadFont('assets/Boogaloo-Regular.ttf', () => { console.log("Font 'Boogaloo-Regular' loaded."); }, (err) => { console.error("Failed to load font 'Boogaloo-Regular':", err); });
-    fontBreeSerifRegular = loadFont('assets/BreeSerif-Regular.ttf', () => { console.log("Font 'BreeSerif-Regular' loaded."); }, (err) => { console.error("Failed to load font 'BreeSerif-Regular':", err); });
-    fontCaveatBrushRegular = loadFont('assets/CaveatBrush-Regular.ttf', () => { console.log("Font 'CaveatBrush-Regular' loaded."); }, (err) => { console.error("Failed to load font 'CaveatBrush-Regular':", err); });
-    fontCherryBombOneRegular = loadFont('assets/CherryBombOne-Regular.ttf', () => { console.log("Font 'CherryBombOne-Regular' loaded."); }, (err) => { console.error("Failed to load font 'CherryBombOne-Regular':", err); });
-    fontCinzelDecorativeBlack = loadFont('assets/CinzelDecorative-Black.ttf', () => { console.log("Font 'CinzelDecorative-Black' loaded."); }, (err) => { console.error("Failed to load font 'CinzelDecorative-Black':", err); });
-    fontCinzelDecorativeBold = loadFont('assets/CinzelDecorative-Bold.ttf', () => { console.log("Font 'CinzelDecorative-Bold' loaded."); }, (err) => { console.error("Failed to load font 'CinzelDecorative-Bold':", err); });
-    fontCinzelDecorativeRegular = loadFont('assets/CinzelDecorative-Regular.ttf', () => { console.log("Font 'CinzelDecorative-Regular' loaded."); }, (err) => { console.error("Failed to load font 'CinzelDecorative-Regular':", err); });
-    fontDynaPuffBold = loadFont('assets/DynaPuff-Bold.ttf', () => { console.log("Font 'DynaPuff-Bold' loaded."); }, (err) => { console.error("Failed to load font 'DynaPuff-Bold':", err); });
-    fontDynaPuffMedium = loadFont('assets/DynaPuff-Medium.ttf', () => { console.log("Font 'DynaPuff-Medium' loaded."); }, (err) => { console.error("Failed to load font 'DynaPuff-Medium':", err); });
-    fontDynaPuffRegular = loadFont('assets/DynaPuff-Regular.ttf', () => { console.log("Font 'DynaPuff-Regular' loaded."); }, (err) => { console.error("Failed to load font 'DynaPuff-Regular':", err); });
-    fontInterBold = loadFont('assets/Inter-Bold.ttf', () => { console.log("Font 'Inter-Bold' loaded."); }, (err) => { console.error("Failed to load font 'Inter-Bold':", err); });
-    fontInterRegular = loadFont('assets/Inter-Regular.ttf', () => { console.log("Font 'Inter-Regular' loaded."); }, (err) => { console.error("Failed to load font 'Inter-Regular':", err); });
-    fontPixelifySansRegular = loadFont('assets/PixelifySans-Regular.ttf', () => { console.log("Font 'PixelifySans-Regular' loaded."); }, (err) => { console.error("Failed to load font 'PixelifySans-Regular':", err); });
-    fontSenBold = loadFont('assets/Sen-Bold.ttf', () => { console.log("Font 'Sen-Bold' loaded."); }, (err) => { console.error("Failed to load font 'Sen-Bold':", err); });
-    fontSenMedium = loadFont('assets/Sen-Medium.ttf', () => { console.log("Font 'Sen-Medium' loaded."); }, (err) => { console.error("Failed to load font 'Sen-Medium':", err); });
-    fontSenRegular = loadFont('assets/Sen-Regular.ttf', () => { console.log("Font 'Sen-Regular' loaded."); }, (err) => { console.error("Failed to load font 'Sen-Regular':", err); });
-    fontShareTechMonoRegular = loadFont('assets/ShareTechMono-Regular.ttf', () => { console.log("Font 'ShareTechMono-Regular' loaded."); }, (err) => { console.error("Failed to load font 'ShareTechMono-Regular':", err); });
-    fontVT323Regular = loadFont('assets/VT323-Regular.ttf', () => { console.log("Font 'VT323-Regular' loaded."); }, (err) => { console.error("Failed to load font 'VT323-Regular':", err); });
+  // Provided empty function callbacks for loadImage as well
+  logoImage = loadImage('assets/placeholder-logo.svg', () => {}, (err) => {});
 
-
-    logoImage = loadImage('assets/placeholder-logo.svg',
-                          () => { console.log("Logo 'placeholder-logo.svg' loaded."); },
-                          (err) => {
-                            console.error("Failed to load logo 'placeholder-logo.svg':", err);
-                          }
-                         );
-
-  } catch (e) {
-    console.error("Error occurred during asset loading in preload:", e);
-  }
+  // --- END: Variables for ALL Loaded Fonts ---
 }
 let canvasPG;
 let initialPositioningDone = false;
@@ -670,7 +640,6 @@ let initialPositioningDone = false;
 function setup() {
   createCanvas(windowWidth, windowHeight);
     if (width <= 0 || height <= 0) {
-        console.error("Canvas size invalid, restarting setup.");
          return;
      }
 
@@ -749,23 +718,11 @@ function setup() {
 
 function draw() {
     if (!initialPositioningDone) {
-        console.log("First draw cycle: Performing initial DOM element and canvasPG positioning.");
         positionDOMElementsAndCanvasPG();
         initialPositioningDone = true;
     }
 
   background(0);
-
-    // --- Add DEBUG logs here BEFORE drawing shapes/logo ---
-    // Check state of a few font variables
-    console.log("Draw loop start. Font variables state:",
-                "Bangers:", fontBangersRegular,
-                "Boogaloo:", fontBoogalooRegular,
-                "Sen:", fontSenRegular);
-    // Check state of logo image variable
-    console.log("Draw loop start. Logo image state:", logoImage);
-    // --- END DEBUG logs ---
-
 
   // --- Update shapes ---
   for (let i = shapes.length - 1; i >= 0; i--) {
@@ -848,17 +805,10 @@ function draw() {
          let logoDrawX = logoX;
          let logoDrawY = logoCenterY - logoTargetHeight / 2;
 
-         // --- START DEBUG: Logo Drawing Parameters ---
-         console.log("Drawing logo:", logoImage,
-                     "Draw Pos:", {logoDrawX, logoDrawY},
-                     "Draw Size:", {logoTargetWidth, logoTargetHeight});
-         // --- END DEBUG ---
-
          imageMode(CORNER);
          image(logoImage, logoDrawX, logoDrawY, logoTargetWidth, logoTargetHeight);
 
     } else {
-         console.warn("Drawing fallback logo text because SVG failed loading check.");
          fill(50);
          textSize(20);
          textAlign(LEFT, CENTER);
@@ -873,7 +823,6 @@ function draw() {
 }
 
 function positionDOMElementsAndCanvasPG() {
-     console.log("positionDOMElementsAndCanvasPG called.");
 
      const minCanvasW = 300;
      const adjustedCanvasW = min(CANVAS_AREA_W_BASE, max(minCanvasW, windowWidth * 0.95));
@@ -904,16 +853,13 @@ function positionDOMElementsAndCanvasPG() {
 
 
     if (canvasPG && (canvasPG.width !== CANVAS_AREA_W || canvasPG.height !== CANVAS_AREA_H)) {
-         console.log(`Resizing canvasPG buffer to new calculated size: ${CANVAS_AREA_W}x${CANVAS_AREA_H}`);
          if (CANVAS_AREA_W > 0 && CANVAS_AREA_H > 0) {
               canvasPG.resizeCanvas(CANVAS_AREA_W, CANVAS_AREA_H);
                canvasPG.background(255);
          } else {
-              console.error("Attempted to resize canvasPG to invalid dimensions, disposing buffer.");
                if (canvasPG) { try { canvasPG.remove(); } catch(e) {} } canvasPG = null;
          }
      } else if (!canvasPG && CANVAS_AREA_W > 0 && CANVAS_AREA_H > 0) {
-          console.log("Creating canvasPG buffer in windowResized as it was null.");
           canvasPG = createGraphics(CANVAS_AREA_W, CANVAS_AREA_H);
           canvasPG.background(255);
      }
@@ -921,7 +867,6 @@ function positionDOMElementsAndCanvasPG() {
 
      // --- Ensure textMeasurePG is initialized or re-initialized defensively ---
      if (!textMeasurePG || typeof textMeasurePG.textWidth !== 'function') {
-          console.log("Recreating textMeasurePG buffer as it was null or invalid.");
           if (textMeasurePG) { try { textMeasurePG.remove(); } catch(e) {} }
           try {
                textMeasurePG = createGraphics(10, 10);
@@ -933,7 +878,6 @@ function positionDOMElementsAndCanvasPG() {
                 }
                if (typeof textMeasurePG.textAlign === 'function') textMeasurePG.textAlign(CENTER, CENTER);
           } catch(e) {
-               console.error("Failed to recreate textMeasurePG:", e);
                textMeasurePG = null;
           }
      }
@@ -979,12 +923,9 @@ function positionDOMElementsAndCanvasPG() {
     if (savePNGButton) { savePNGButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += btnOuterWidth(savePNGButton) + buttonSpacing; }
     if (saveHighResPNGButton) { saveHighResPNGButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += btnOuterWidth(saveHighResPNGButton) + buttonSpacing; }
     if (savePDFButton) { savePDFButton.position(currentButtonX, buttonPadY_buttons); /* Last button */ }
-
-     console.log(`Finished positionDOMElementsAndCanvasPG. CANVAS_AREA: ${CANVAS_AREA_X}, ${CANVAS_AREA_Y}, ${CANVAS_AREA_W}, ${CANVAS_AREA_H}`);
 }
 
 function windowResized() {
-    console.log(`Window resized event triggered: ${windowWidth}x${windowHeight}`);
      if (windowWidth > 0 && windowHeight > 0 && (windowWidth !== width || windowHeight !== height)) {
         resizeCanvas(windowWidth, windowHeight);
          positionDOMElementsAndCanvasPG();
@@ -1023,8 +964,6 @@ function mousePressed() {
                     inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
                     inputElement.elt.blur();
                  }
-
-                console.log("Grabbed a placed item.");
                 return false;
            }
        }
@@ -1049,8 +988,6 @@ function mousePressed() {
                  inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
                   inputElement.elt.blur();
               }
-
-              console.log("Grabbed a floating shape.");
               return false;
           }
       }
@@ -1067,7 +1004,6 @@ function mouseReleased() {
       if (wasTextItem) {
            let content = inputElement.value().trim();
            if(content === "" || content === TEXT_OPTIONS[0].trim()) {
-               console.log("Discarding empty text item dropped on canvas.");
                shapes = shapes.filter(s => s !== grabbedItem);
                grabbedItem = null;
                 inputElement.value('');
@@ -1091,13 +1027,11 @@ function mouseReleased() {
       grabbedItem.isPlacing = true;
       grabbedItem.landFrame = frameCount;
 
-      console.log("Item placed on canvas area.");
 
     } else {
          if (wasTextItem) {
              let content = inputElement.value().trim();
              if (content === "" || content === TEXT_OPTIONS[0].trim()) {
-                  console.log("Discarding empty text item dropped outside canvas.");
                   shapes = shapes.filter(s => s !== grabbedItem);
                   grabbedItem = null;
                    inputElement.value('');
@@ -1113,8 +1047,6 @@ function mouseReleased() {
           grabbedItem.speedY = random(-1.5, 1.5);
           grabbedItem.rotationSpeed = random(-0.003, 0.003);
           grabbedItem.isPlacing = false;
-
-          console.log("Item dropped outside canvas area, returned to floating.");
     }
 
     if (grabbedItem !== null) {
@@ -1132,7 +1064,6 @@ function doubleClicked() {
     for (let i = placedItems.length - 1; i >= 0; i--) {
         let item = placedItems[i];
         if (item.isMouseOver(mouseX, mouseY)) {
-            console.log("Double-clicked a placed item, sending to back.");
             let itemToSendToBack = placedItems.splice(i, 1)[0];
             placedItems.unshift(itemToSendToBack);
             itemToSendToBack.solidify();
@@ -1164,7 +1095,6 @@ function keyPressed() {
     }
 
     if (grabbedItem && (keyCode === DELETE || keyCode === BACKSPACE)) {
-        console.log("Deleting grabbed item.");
         shapes = shapes.filter(s => s !== grabbedItem);
         placedItems = placedItems.filter(s => s !== grabbedItem);
         grabbedItem = null;
@@ -1196,7 +1126,6 @@ function keyPressed() {
 function addNewTextShapeFromInput() {
     let currentText = inputElement.value();
     if (!currentText || currentText.trim() === "" || currentText.trim() === TEXT_OPTIONS[0].trim()) {
-         console.log("Input empty/placeholder, not adding text.");
          inputElement.style("border-color", "red");
          setTimeout(() => inputElement.style("border-color", "#ccc"), 500);
          inputElement.value('');
@@ -1204,8 +1133,6 @@ function addNewTextShapeFromInput() {
          inputElement.elt.focus();
          return;
     }
-
-    console.log("Adding new text shape:", currentText.trim());
 
     let newTextShape = new FloatingShape();
 
@@ -1259,14 +1186,13 @@ function addNewTextShapeFromInput() {
         fontVT323Regular
     ];
 
+    // Filter for fonts that loaded successfully AND have a text method (check p5.Font object structure)
     const usableFonts = potentialFonts.filter(f => f && typeof f.text === 'function');
 
     if (usableFonts.length > 0) {
         newTextShape.font = random(usableFonts);
-         console.log("Assigned random loaded font to new text shape:", newTextShape.font.font);
     } else {
         newTextShape.font = baseFont;
-         console.warn("No custom fonts loaded successfully for new text shape. Using baseFont fallback:", newTextShape.font);
     }
     // --- End font assignment ---
 
@@ -1298,7 +1224,6 @@ function addNewTextShapeFromInput() {
      }
 
      if (spawnedCustom) {
-          console.log(`Adding new text shape: Spawning near artboard (${spawnSide} side).`);
           newTextShape.y = random(CANVAS_AREA_Y - spawnMargin, CANVAS_AREA_Y + CANVAS_AREA_H + spawnMargin);
           newTextShape.y = max(newTextShape.y, HEADER_HEIGHT + spawnMargin);
           newTextShape.y = max(spawnMargin, min(newTextShape.y, height - spawnMargin));
@@ -1307,8 +1232,6 @@ function addNewTextShapeFromInput() {
           newTextShape.rotation = random(TWO_PI);
           newTextShape.rotationSpeed = random(-0.001, 0.001);
 
-     } else {
-           console.log("Adding new text shape: Side areas too small or zero space, using default off-screen spawn from reset().");
      }
     // --- End Custom SPAWN LOCATION ---
 
@@ -1346,9 +1269,7 @@ function generateTimestampString() {
 
 
 function saveCanvasAreaAsPNG() {
-    console.log("SAVE PNG button pressed (Standard Resolution)");
     if (!canvasPG || canvasPG.width <= 0 || canvasPG.height <= 0) {
-        console.warn("Cannot save Standard PNG: canvasPG not created or has zero dimensions.");
         alert("Error: Cannot save standard PNG. Canvas area buffer is not available or invalid.");
         return;
     }
@@ -1363,18 +1284,14 @@ function saveCanvasAreaAsPNG() {
     saveBuffer.rect(0.5, 0.5, saveBuffer.width - 1, saveBuffer.height - 1);
     saveBuffer.pop();
 
-    console.log("Saving Standard PNG...");
     saveCanvas(saveBuffer, 'myArtboard_stdres_' + generateTimestampString() + '.png');
-     console.log("Standard PNG save initiated.");
     if (saveBuffer) { saveBuffer.remove(); }
 }
 
 
 function saveCanvasAreaAsHighResPNG() {
-    console.log("SAVE HIGH-RES PNG button pressed (B2 @ 300 DPI target scaling from base 500px width)");
 
      if (!canvasPG || canvasPG.width <= 0 || canvasPG.height <= 0) {
-        console.warn("Cannot generate high-res PNG: canvasPG not created or has zero dimensions.");
         alert("Error: Cannot save high-resolution PNG. Canvas area buffer is not available or invalid.");
         return;
      }
@@ -1396,7 +1313,6 @@ function saveCanvasAreaAsHighResPNG() {
     let highResPG = null;
      try {
          if (targetWidthPixels <= 0 || targetHeightPixels <= 0 || isNaN(targetWidthPixels) || isNaN(targetHeightPixels)) {
-             console.error("Invalid target high-res dimensions calculated:", targetWidthPixels, targetHeightPixels);
              alert("Error calculating high-res save size.");
              return;
          }
@@ -1404,7 +1320,6 @@ function saveCanvasAreaAsHighResPNG() {
         highResPG = createGraphics(targetWidthPixels, targetHeightPixels);
         highResPG.background(255);
 
-        console.log(`Drawing ${placedItems.length} placed items onto high-res buffer...`);
         for (let i = 0; i < placedItems.length; i++) {
              let item = placedItems[i];
 
@@ -1419,7 +1334,6 @@ function saveCanvasAreaAsHighResPNG() {
              let hrItemY = (item.y - CANVAS_AREA_Y) * scaleFactor + verticalOffset;
 
              if (isNaN(hrItemX) || isNaN(hrItemY)) {
-                 console.warn(`Calculated NaN position for item ${i}. Skipping draw.`, item);
                  highResPG.pop(); continue;
              }
             highResPG.translate(hrItemX, hrItemY);
@@ -1458,39 +1372,31 @@ function saveCanvasAreaAsHighResPNG() {
 
         highResPG.pop();
 
-        console.log(`Saving high-res PNG (${targetWidthPixels}x${targetHeightPixels})...`);
         if (targetWidthPixels > 0 && targetHeightPixels > 0) {
              saveCanvas(highResPG, `myArtboard_HIRES_${targetWidthPixels}x${targetHeightPixels}_` + generateTimestampString() + '.png');
-             console.log("High-res PNG save initiated.");
          } else {
-              console.warn("Cannot save high-res PNG: Target dimensions are invalid after calculation.");
-             alert("Error: High-resolution dimensions are invalid.");
+              alert("Error: High-resolution dimensions are invalid.");
          }
 
      } catch(e) {
-        console.error("An unexpected error occurred during high-res PNG generation:", e);
-        alert("Error saving high-resolution PNG. Check browser console.");
+        alert("Error saving high-resolution PNG. Check browser console for technical details if logs were enabled.");
         if (highResPG) {
              if (typeof highResPG.isRecording === 'boolean' && highResPG.isRecording && typeof highResPG.endRecord === 'function') {
-                 console.warn("Attempting to call highResPG.endRecord() after caught error.");
-                 try{ highResPG.endRecord(); } catch(endErr) { console.error("Error calling highResPG.endRecord() during error handling:", endErr); }
+                 try{ highResPG.endRecord(); } catch(endErr) {}
              }
-             if (typeof highResPG.remove === 'function') { try { highResPG.remove(); } catch(remErr) { console.error("Error calling highResPG.remove() during error handling:", remErr); } }
+             if (typeof highResPG.remove === 'function') { try { highResPG.remove(); } catch(remErr) {} }
          }
      } finally {
         if (highResPG) {
              highResPG.remove();
-             console.log("High-res buffer disposed.");
          }
      }
 }
 
 
 function saveCanvasAreaAsPDF() {
-    console.log("SAVE PDF button pressed (using zenoZeng's p5.pdf)");
 
     if (typeof p5 === 'undefined' || !p5.prototype.createPDF || typeof p5.prototype.createPDF !== 'function') {
-         console.error("p5.pdf library not loaded or not providing createPDF method. Check index.html script includes and load order.");
          alert("Error: PDF library not loaded or initialized correctly. Please ensure 'p5.pdf.js' is included AFTER 'p5.js'.");
          return;
      }
@@ -1501,13 +1407,11 @@ function saveCanvasAreaAsPDF() {
          pdf = p5.prototype.createPDF(this);
 
         if (!pdf || typeof pdf.beginRecord !== 'function' || typeof pdf.endRecord !== 'function' || typeof pdf.save !== 'function') {
-            console.error("p5.PDF instance created, but key methods are missing. Check p5.pdf.js integrity or version.");
-             if (pdf && typeof pdf.remove === 'function') { try { pdf.remove(); } catch(e) { console.error("Error disposing partial PDF object:", e); } }
+             if (pdf && typeof pdf.remove === 'function') { try { pdf.remove(); } catch(e) {} }
              pdf = null;
              alert("Error creating PDF instance. PDF library might be corrupted or incompatible.");
             return;
         }
-        console.log("p5.PDF instance created. Starting record.");
 
         pdf.beginRecord();
 
@@ -1518,7 +1422,6 @@ function saveCanvasAreaAsPDF() {
          noStroke();
          rect(0, 0, CANVAS_AREA_W, CANVAS_AREA_H);
 
-        console.log(`Drawing ${placedItems.length} placed items for PDF...`);
         for (let i = 0; i < placedItems.length; i++) {
              let item = placedItems[i];
 
@@ -1558,7 +1461,6 @@ function saveCanvasAreaAsPDF() {
 
         pop();
 
-        console.log("Finished recording. Saving PDF.");
         pdf.endRecord();
 
         pdf.save({
@@ -1568,27 +1470,22 @@ function saveCanvasAreaAsPDF() {
             margin: {top:0, right:0, bottom:0, left:0}
         });
 
-        console.log("PDF save initiated.");
 
      } catch(e) {
-         console.error("An error occurred during PDF generation:", e);
-         alert("Error generating PDF. Check browser console.");
+         alert("Error generating PDF. Check browser console for technical details if logs were enabled.");
          if (pdf && typeof pdf.isRecording === 'boolean' && pdf.isRecording && typeof pdf.endRecord === 'function') {
-             console.warn("Attempting to call pdf.endRecord() after caught error.");
-             try{ pdf.endRecord(); } catch(endErr) { console.error("Error calling pdf.endRecord() during error handling:", endErr); }
+             try{ pdf.endRecord(); } catch(endErr) {}
          }
-         if (pdf && typeof pdf.remove === 'function') { try { pdf.remove(); } catch(remErr) { console.error("Error calling pdf.remove() during error handling:", remErr); } }
+         if (pdf && typeof pdf.remove === 'function') { try { pdf.remove(); } catch(remErr) {} }
      }
 }
 
 function resetRandom() {
-    console.log("REFRESH button pressed");
     let tempGrabbedItem = grabbedItem;
     let wasFloating = tempGrabbedItem && shapes.includes(tempGrabbedItem);
 
     if (wasFloating) {
         shapes = shapes.filter(s => s !== tempGrabbedItem);
-         console.log("Keeping grabbed item during refresh.");
     }
 
     shapes = [];
@@ -1601,11 +1498,9 @@ function resetRandom() {
     if (wasFloating && tempGrabbedItem) {
         shapes.push(tempGrabbedItem);
     }
-    console.log(`Refreshed floating shapes. Total shapes: ${shapes.length}`);
 }
 
 function restartAll() {
-    console.log("CLEAR button pressed. Restarting state.");
     placedItems = [];
     shapes = [];
     grabbedItem = null;
@@ -1616,12 +1511,9 @@ function restartAll() {
 
      if (canvasPG) {
          canvasPG.clear();
-          console.log("canvasPG buffer cleared.");
      }
 
     while (shapes.length < 30) { shapes.push(new FloatingShape()); }
-
-    console.log(`State cleared and repopulated with new floating shapes. Total shapes: ${shapes.length}`);
 }
 
 let touchGrabbed = false;
@@ -1667,7 +1559,6 @@ function touchStarted(event) {
 
                  touchGrabbed = true;
                   if (event.cancelable) event.preventDefault();
-                 console.log("Touch grabbed a placed item.");
                  return false;
              }
          }
@@ -1692,7 +1583,6 @@ function touchStarted(event) {
 
             touchGrabbed = true;
              if (event.cancelable) event.preventDefault();
-            console.log("Touch grabbed a floating shape.");
             return false;
           }
         }
