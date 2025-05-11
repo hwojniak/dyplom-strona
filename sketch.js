@@ -1,6 +1,3 @@
-// FIX: Efficiency issues significantly improved with canvasPG and textMeasurePG
-// This version addresses user-specific bugs and preferences for Step 1.
-
 // Interactive canvas website-tool project using p5.js
 
 let shapes = []; // Shapes currently floating or grabbed (Includes temporarily grabbed placed items)
@@ -69,6 +66,30 @@ let fontSenMedium;
 let fontSenRegular;
 let fontShareTechMonoRegular;
 let fontVT323Regular;
+
+// Array of potential font variables for random selection
+const potentialFontVariables = [
+    'fontBangersRegular',
+    'fontBoogalooRegular',
+    'fontBreeSerifRegular',
+    'fontCaveatBrushRegular',
+    'fontCherryBombOneRegular',
+    'fontCinzelDecorativeBlack',
+    'fontCinzelDecorativeBold',
+    'fontCinzelDecorativeRegular',
+    'fontDynaPuffBold',
+    'fontDynaPuffMedium',
+    'fontDynaPuffRegular',
+    'fontInterBold',
+    'fontInterRegular',
+    'fontPixelifySansRegular',
+    'fontSenBold',
+    'fontSenMedium',
+    'fontSenRegular',
+    'fontShareTechMonoRegular',
+    'fontVT323Regular'
+];
+let usableFonts = []; // Array to hold successfully loaded font objects
 // --- END: Variables for ALL Loaded Fonts ---
 
 let logoImage;        // Variable to hold the loaded SVG logo
@@ -231,9 +252,9 @@ function getTextBounds(content, effectiveTextSize, baseFontRef) {
     try {
         // Apply font properties to the measurement buffer context
         // Use the font reference provided, or a default if none/invalid
-        if (baseFontRef && textMeasurePG.textFont) {
+        if (baseFontRef && typeof textMeasurePG.textFont === 'function') {
              textMeasurePG.textFont(baseFontRef);
-        } else if (textMeasurePG.textFont){
+        } else if (typeof textMeasurePG.textFont === 'function'){
              textMeasurePG.textFont('monospace');
         } else {
               return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
@@ -335,7 +356,14 @@ class FloatingShape {
          }
          this.content = initialContent.trim();
          this.textScaleAdjust = category.textScaleAdjust;
-         this.font = baseFont; // Default to baseFont initially (will be overridden if custom fonts load)
+
+         // --- Assign a random loaded font from the usableFonts array ---
+         if (usableFonts.length > 0) {
+              this.font = random(usableFonts);
+         } else {
+              this.font = baseFont; // Fallback
+         }
+         // --- End font assignment ---
 
 
     } else { // type is 'shape'
@@ -649,37 +677,25 @@ function setup() {
 
     textMeasurePG = createGraphics(1, 1);
 
+    // --- Filter usable fonts after they are loaded in preload ---
+    // This array will be used by both reset() and addNewTextShapeFromInput()
+    usableFonts = potentialFontVariables
+        .map(varName => window[varName]) // Get the actual font object from the global scope
+        .filter(f => f); // Filter for truthy values (successfully loaded fonts)
+    // --- End filter usable fonts ---
+
+
     // --- Set initial textMeasurePG font ---
-    if (fontSenRegular && typeof fontSenRegular.text === 'function') { // Example: Use Sen-Regular as the default for measurement
+    // Use the first usable font for measurement if available, otherwise fallback
+    if (usableFonts.length > 0 && typeof usableFonts[0].text === 'function') {
+        textMeasurePG.textFont(usableFonts[0]);
+    } else if (fontSenRegular && typeof fontSenRegular.text === 'function') { // Fallback to Sen-Regular if it specifically loaded
         textMeasurePG.textFont(fontSenRegular);
-    } else if (baseFont && typeof textMeasurePG.textFont === 'function') {
+    }
+    else if (baseFont && typeof textMeasurePG.textFont === 'function') {
         textMeasurePG.textFont(baseFont); // Fallback to monospace string
     }
     // --- End Set initial textMeasurePG font ---
-
-    // --- DEBUG: Log font variable states after preload ---
-    console.log("SETUP: Font loading status:");
-    console.log("fontBangersRegular:", fontBangersRegular ? "Loaded" : "Failed");
-    console.log("fontBoogalooRegular:", fontBoogalooRegular ? "Loaded" : "Failed");
-    console.log("fontBreeSerifRegular:", fontBreeSerifRegular ? "Loaded" : "Failed");
-    console.log("fontCaveatBrushRegular:", fontCaveatBrushRegular ? "Loaded" : "Failed");
-    console.log("fontCherryBombOneRegular:", fontCherryBombOneRegular ? "Loaded" : "Failed");
-    console.log("fontCinzelDecorativeBlack:", fontCinzelDecorativeBlack ? "Loaded" : "Failed");
-    console.log("fontCinzelDecorativeBold:", fontCinzelDecorativeBold ? "Loaded" : "Failed");
-    console.log("fontCinzelDecorativeRegular:", fontCinzelDecorativeRegular ? "Loaded" : "Failed");
-    console.log("fontDynaPuffBold:", fontDynaPuffBold ? "Loaded" : "Failed");
-    console.log("fontDynaPuffMedium:", fontDynaPuffMedium ? "Loaded" : "Failed");
-    console.log("fontDynaPuffRegular:", fontDynaPuffRegular ? "Loaded" : "Failed");
-    console.log("fontInterBold:", fontInterBold ? "Loaded" : "Failed");
-    console.log("fontInterRegular:", fontInterRegular ? "Loaded" : "Failed");
-    console.log("fontPixelifySansRegular:", fontPixelifySansRegular ? "Loaded" : "Failed");
-    console.log("fontSenBold:", fontSenBold ? "Loaded" : "Failed");
-    console.log("fontSenMedium:", fontSenMedium ? "Loaded" : "Failed");
-    console.log("fontSenRegular:", fontSenRegular ? "Loaded" : "Failed");
-    console.log("fontShareTechMonoRegular:", fontShareTechMonoRegular ? "Loaded" : "Failed");
-    console.log("fontVT323Regular:", fontVT323Regular ? "Loaded" : "Failed");
-     console.log("logoImage:", logoImage && typeof logoImage.width === 'number' && logoImage.width > 0 ? "Loaded" : "Failed or Invalid");
-    // --- END DEBUG ---
 
 
   inputElement = createInput();
@@ -895,12 +911,12 @@ function positionDOMElementsAndCanvasPG() {
           try {
                textMeasurePG = createGraphics(10, 10);
                // Re-apply essential text properties
-                // Check for truthiness before calling textFont
-                if (fontSenRegular) {
-                    textMeasurePG.textFont(fontSenRegular);
-                } else {
+                // Use the first usable font for measurement if available, otherwise fallback
+               if (usableFonts.length > 0) {
+                   textMeasurePG.textFont(usableFonts[0]);
+               } else {
                     textMeasurePG.textFont(baseFont); // Fallback
-                }
+               }
                if (typeof textMeasurePG.textAlign === 'function') textMeasurePG.textAlign(CENTER, CENTER);
           } catch(e) {
                textMeasurePG = null;
@@ -1189,42 +1205,11 @@ function addNewTextShapeFromInput() {
 
 
     // --- Assign a random loaded font ---
-    const potentialFonts = [
-        fontBangersRegular,
-        fontBoogalooRegular,
-        fontBreeSerifRegular,
-        fontCaveatBrushRegular,
-        fontCherryBombOneRegular,
-        fontCinzelDecorativeBlack,
-        fontCinzelDecorativeBold,
-        fontCinzelDecorativeRegular,
-        fontDynaPuffBold,
-        fontDynaPuffMedium,
-        fontDynaPuffRegular,
-        fontInterBold,
-        fontInterRegular,
-        fontPixelifySansRegular,
-        fontSenBold,
-        fontSenMedium,
-        fontSenRegular,
-        fontShareTechMonoRegular,
-        fontVT323Regular
-    ];
-
-    // Filter for fonts that loaded successfully (are truthy)
-    // CORRECTED FILTER: Check if the variable holds a valid font object (is truthy)
-    const usableFonts = potentialFonts.filter(f => f);
-
+    // usableFonts array is filtered once in setup()
     if (usableFonts.length > 0) {
         newTextShape.font = random(usableFonts);
-         // --- DEBUG: Log selected font ---
-         console.log(`addNewTextShapeFromInput: ${usableFonts.length} usable fonts found. Assigned font:`, newTextShape.font);
-         // --- END DEBUG ---
     } else {
         newTextShape.font = baseFont;
-        // --- DEBUG: Log fallback font ---
-        console.log(`addNewTextShapeFromInput: 0 usable fonts found. Using fallback font:`, newTextShape.font);
-        // --- END DEBUG ---
     }
     // --- End font assignment ---
 
@@ -1385,12 +1370,12 @@ function saveCanvasAreaAsHighResPNG() {
              itemTextScale = max(itemTextScale, 1e-3);
 
              // Check if itemFont is a valid p5.Font object before using it
-             if (itemFont && typeof itemFont.text === 'function') { // Keep this check when applying to graphics context
+             if (itemFont) { // Check for truthiness is enough here
                  highResPG.textFont(itemFont);
              } else {
                   // Fallback on highResPG if the specific item font is bad
-                  if (fontSenRegular) highResPG.textFont(fontSenRegular);
-                  else highResPG.textFont(baseFont);
+                   if (usableFonts.length > 0) highResPG.textFont(usableFonts[0]); // Use first usable if available
+                  else highResPG.textFont(baseFont); // Fallback string
              }
 
 
@@ -1422,7 +1407,7 @@ function saveCanvasAreaAsHighResPNG() {
          }
 
      } catch(e) {
-        alert("Error saving high-resolution PNG. Check browser console for technical details if logs were enabled.");
+        alert("Error saving high-resolution PNG. Check browser console for technical details.");
         if (highResPG) {
              if (typeof highResPG.isRecording === 'boolean' && highResPG.isRecording && typeof highResPG.endRecord === 'function') {
                  try{ highResPG.endRecord(); } catch(endErr) {}
@@ -1489,13 +1474,14 @@ function saveCanvasAreaAsPDF() {
              itemTextScale = max(itemTextScale, 1e-3);
 
              // Check if itemFont is a valid p5.Font object before using it on PDF
-             if (itemFont && typeof itemFont.text === 'function') { // Check for the text method again for safety
+             if (itemFont) { // Check for truthiness is enough here
                  pdf.textFont(itemFont);
              } else {
                   // Fallback on PDF if the specific item font is bad
-                   if (fontSenRegular) pdf.textFont(fontSenRegular);
-                  else pdf.textFont(baseFont); // baseFont is a string, pdf might handle it
+                   if (usableFonts.length > 0) pdf.textFont(usableFonts[0]); // Use first usable if available
+                  else pdf.textFont(baseFont); // Fallback string
              }
+
 
             item.drawShapePrimitive(pdf, 0, 0, item.size, item.shapeType, item.type === 'text', itemTextScale);
 
@@ -1521,7 +1507,7 @@ function saveCanvasAreaAsPDF() {
 
 
      } catch(e) {
-         alert("Error generating PDF. Check browser console for technical details if logs were enabled.");
+         alert("Error generating PDF. Check browser console for technical details.");
          if (pdf && typeof pdf.isRecording === 'boolean' && pdf.isRecording && typeof pdf.endRecord === 'function') {
              try{ pdf.endRecord(); } catch(endErr) {}
          }
