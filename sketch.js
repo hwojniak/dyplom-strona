@@ -1247,90 +1247,99 @@ function mouseWheel(event) {
 }
 
 // Handles key press events
-function keyPressed() {
+function keyPressed(event) { // Add event parameter if p5.js doesn't pass it implicitly
     // If the input element is focused, let the browser handle key presses for typing
     if (document.activeElement === inputElement.elt) {
-        // Allow Enter key to add text from input field, but handle it in the event listener
         if (keyCode === ENTER) {
-             // The keypress listener on inputElement handles this
-             return true; // Allow default propagation here, listener will preventDefault if needed
+            return true; // Allow default propagation here, listener will preventDefault if needed
         }
         return true; // Allow other keys for typing
     }
 
-     // If focus is not on the body or canvas, let the browser handle it (e.g., other form elements)
-     if (document.activeElement !== document.body && document.activeElement !== canvas.elt) {
+    // If focus is not on the body or canvas, let the browser handle it
+    if (document.activeElement !== document.body && document.activeElement !== canvas.elt) {
         return true;
     }
 
-    // --- MODIFIED SECTION FOR GRABBED ITEM ---
     if (grabbedItem) {
-        const scaleIncrement = 1.08; // Scale up by 8%
-        const scaleDecrement = 1 / scaleIncrement; // Scale down by 1/1.08
-        const minScale = 0.05; // Minimum scale factor
-        const maxScale = 10.0; // Maximum scale factor
+        const scaleIncrement = 1.08;
+        const scaleDecrement = 1 / scaleIncrement;
+        const minScale = 0.05;
+        const maxScale = 10.0;
 
-        // SECTION A: CONTROL key is pressed (Primarily for SCALING)
         if (keyIsDown(CONTROL)) {
-            // Check for Ctrl + Equals Key (for scale up) OR Ctrl + Numpad Plus
+            // Check for Ctrl + Equals Key OR Ctrl + Numpad Plus for scale up
             if (key === '=' || keyCode === 107) { // 107 is Numpad Add
                 grabbedItem.scaleFactor *= scaleIncrement;
                 grabbedItem.scaleFactor = min(grabbedItem.scaleFactor, maxScale);
+                if (event && typeof event.preventDefault === 'function') {
+                    event.preventDefault(); // PREVENT BROWSER ZOOM
+                }
                 return false; // Consume the event
             }
-            // Check for Ctrl + Hyphen Key (for scale down) OR Ctrl + Numpad Minus
+            // Check for Ctrl + Hyphen Key OR Ctrl + Numpad Minus for scale down
             if (key === '-' || keyCode === 109) { // 109 is Numpad Subtract
                 grabbedItem.scaleFactor *= scaleDecrement;
                 grabbedItem.scaleFactor = max(grabbedItem.scaleFactor, minScale);
+                if (event && typeof event.preventDefault === 'function') {
+                    event.preventDefault(); // PREVENT BROWSER ZOOM
+                }
                 return false; // Consume the event
             }
-            // If Ctrl is down but not for a recognized scaling combo,
-            // consume the event to prevent typing characters like "Ctrl+a" into the text "in the air".
-            // You could `return true` if you wanted to allow other browser Ctrl+ shortcuts.
+            // For other Ctrl+key combinations while an item is grabbed, prevent default and consume
+            // This helps avoid unintended browser actions.
+            if (event && typeof event.preventDefault === 'function') {
+                 event.preventDefault();
+            }
             return false;
-        }
-        // SECTION B: CONTROL key is NOT pressed (For item deletion or "in-air" text editing)
-        else {
-            // Sub-section B1: Item Deletion with DELETE key
+
+        } else { // CONTROL key is NOT pressed
             if (keyCode === DELETE) {
                 shapes = shapes.filter(s => s !== grabbedItem);
                 placedItems = placedItems.filter(s => s !== grabbedItem);
-                grabbedItem = null; // Clear grabbed item reference
+                grabbedItem = null;
                 inputElement.value('');
                 inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-                inputElement.elt.blur(); // Remove focus from input
-                return false; // Consume the event
-            }
-
-            // Sub-section B2: "In-air" text editing for TEXT items
-            if (grabbedItem.type === 'text') {
-                if (keyCode === BACKSPACE) {
-                    if (grabbedItem.content.length > 0) {
-                        grabbedItem.content = grabbedItem.content.slice(0, -1); // Remove last character
-                        inputElement.value(grabbedItem.content); // Keep input field synced
-                    }
-                    return false; // Consume the event
+                inputElement.elt.blur();
+                if (event && typeof event.preventDefault === 'function') {
+                    event.preventDefault(); // e.g., prevent back navigation if backspace triggered delete
                 }
-                // Check for printable characters (key.length === 1 is a good heuristic)
-                // This includes letters, numbers, symbols (like `+`, `-`, `=`, etc.), and space.
-                else if (key.length === 1) {
-                    grabbedItem.content += key;
-                    inputElement.value(grabbedItem.content); // Keep input field synced
-                    return false; // Consume the event
-                }
-                // For other non-Ctrl, non-Delete, non-Backspace, non-printable keys (e.g., Arrows, Enter, Shift alone)
-                // when a text item is grabbed, consume them to prevent default browser actions like scrolling.
                 return false;
             }
 
-            // If it's a SHAPE (not text) and a key is pressed (not Ctrl, not Delete),
-            // consume it to prevent unexpected behavior or browser defaults.
+            if (grabbedItem.type === 'text') {
+                if (keyCode === BACKSPACE) {
+                    if (grabbedItem.content.length > 0) {
+                        grabbedItem.content = grabbedItem.content.slice(0, -1);
+                        inputElement.value(grabbedItem.content);
+                    }
+                    if (event && typeof event.preventDefault === 'function') {
+                         event.preventDefault(); // Prevent potential browser back navigation
+                    }
+                    return false;
+                } else if (key.length === 1) { // Printable characters
+                    grabbedItem.content += key;
+                    inputElement.value(grabbedItem.content);
+                    // No preventDefault here usually, as we want the character typed.
+                    // But returning false consumes it for p5, preventing other potential handlers.
+                    return false;
+                }
+                // For other non-Ctrl, non-Delete, non-Backspace, non-printable keys on TEXT item
+                // Consume to prevent default browser actions like scrolling with arrow keys.
+                if (event && typeof event.preventDefault === 'function') {
+                     event.preventDefault();
+                }
+                return false;
+            }
+
+            // If it's a SHAPE (not text) and a non-Ctrl key is pressed, consume.
+            if (event && typeof event.preventDefault === 'function') {
+                event.preventDefault();
+            }
             return false;
         }
     }
-    // --- END OF MODIFIED SECTION ---
-
-    return true; // Allow default browser behavior if no item is grabbed and input not focused
+    return true; // Allow default if no item grabbed and input not focused
 }
 
 // Creates a new text shape from the input field content and adds it to floating shapes
