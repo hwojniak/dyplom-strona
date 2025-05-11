@@ -8,7 +8,6 @@ let grabbedItem = null; // The shape currently being dragged
 let inputElement;
 let savePNGButton;         // Existing button for standard PNG save
 let saveHighResPNGButton;  // NEW button for high-resolution PNG save
-let savePDFButton;
 let refreshButton;
 let clearButton;
 
@@ -742,7 +741,6 @@ function setup() {
 
   savePNGButton = createButton("SAVE PNG");
   saveHighResPNGButton = createButton("SAVE HI-RES PNG");
-  savePDFButton = createButton("SAVE PDF");
   clearButton = createButton("CLEAR");
   refreshButton = createButton("RELOAD FLOATING"); // Changed text for clarity
 
@@ -759,7 +757,7 @@ function setup() {
        "box-sizing": "border-box" // Include padding/border
    };
 
-   [savePNGButton, saveHighResPNGButton, savePDFButton, clearButton, refreshButton].forEach(btn => {
+   [savePNGButton, saveHighResPNGButton, clearButton, refreshButton].forEach(btn => {
        if (btn) { // Check if button was successfully created
            Object.keys(baseButtonStyle).forEach(styleKey => {
                 btn.style(styleKey, baseButtonStyle[styleKey]);
@@ -773,7 +771,6 @@ function setup() {
    // Assign click handlers
    if(savePNGButton) savePNGButton.elt.addEventListener('click', saveCanvasAreaAsPNG);
    if(saveHighResPNGButton) saveHighResPNGButton.elt.addEventListener('click', saveCanvasAreaAsHighResPNG);
-   if(savePDFButton) savePDFButton.elt.addEventListener('click', saveCanvasAreaAsPDF);
    if(clearButton) clearButton.elt.addEventListener('click', restartAll);
    if(refreshButton) refreshButton.elt.addEventListener('click', resetFloatingShapes); // Changed function name for clarity
 
@@ -998,12 +995,11 @@ function positionDOMElementsAndCanvasPG() {
     // Get widths of all buttons
     let savePNGBtnW = btnOuterWidth(savePNGButton);
     let saveHighResPNGBtnW = btnOuterWidth(saveHighResPNGButton);
-    let savePDFBtnW = btnOuterWidth(savePDFButton);
     let clearBtnW = btnOuterWidth(clearButton);
     let refreshBtnW = btnOuterWidth(refreshButton);
 
     // Create a list of buttons to position, in order from left to right
-    let allButtons = [refreshButton, clearButton, savePNGButton, saveHighResPNGButton, savePDFButton].filter(btn => btn !== null);
+    let allButtons = [refreshButton, clearButton, savePNGButton, saveHighResPNGButton].filter(btn => btn !== null);
     let totalButtonWidths = allButtons.reduce((sum, btn) => sum + btnOuterWidth(btn), 0);
     let numButtons = allButtons.length;
      let totalSpacing = (numButtons > 1 ? (numButtons - 1) * buttonSpacing : 0); // Total space between buttons
@@ -1028,7 +1024,6 @@ function positionDOMElementsAndCanvasPG() {
     if (clearButton) { clearButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += btnOuterWidth(clearButton) + buttonSpacing; }
     if (savePNGButton) { savePNGButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += btnOuterWidth(savePNGButton) + buttonSpacing; }
     if (saveHighResPNGButton) { saveHighResPNGButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += btnOuterWidth(saveHighResPNGButton) + buttonSpacing; }
-    if (savePDFButton) { savePDFButton.position(currentButtonX, buttonPadY_buttons); /* Last button, no need to update currentButtonX */ }
 }
 
 // Handles window resizing
@@ -1616,119 +1611,6 @@ function saveCanvasAreaAsHighResPNG() {
              }
              // Remove the graphics buffer
              if (typeof highResPG.remove === 'function') { try { highResPG.remove(); } catch(remErr) { console.error("Error removing highResPG:", remErr); } }
-         }
-     }
-}
-
-
-// Saves the central canvas area as a PDF
-function saveCanvasAreaAsPDF() {
-
-    // Check if the PDF library is loaded and initialized correctly
-    if (typeof p5 === 'undefined' || !p5.prototype.createPDF || typeof p5.prototype.createPDF !== 'function') {
-         alert("Error: PDF library not loaded or initialized correctly. Please ensure 'p5.pdf.js' is included AFTER 'p5.js'.");
-         console.error("saveCanvasAreaAsPDF: p5.pdf.js library not found or not initialized.");
-         return;
-     }
-
-    let pdf = null; // Variable for the PDF graphics context
-
-     try {
-         // Create a PDF graphics context with the dimensions of the canvas area
-         // Pass 'this' (the main p5 sketch instance) to associate it correctly
-         pdf = p5.prototype.createPDF(this);
-
-        // Basic check if PDF context was created successfully
-        if (!pdf || typeof pdf.beginRecord !== 'function' || typeof pdf.endRecord !== 'function' || typeof pdf.save !== 'function') {
-             console.error("saveCanvasAreaAsPDF: Failed to create PDF instance.");
-             // Clean up if creation failed partway
-             if (pdf && typeof pdf.remove === 'function') { try { pdf.remove(); } catch(e) {} }
-             pdf = null;
-             alert("Error creating PDF instance. PDF library might be corrupted or incompatible.");
-            return;
-        }
-
-        pdf.beginRecord(); // Start recording drawing commands for the PDF
-
-        // Set PDF graphics properties
-        pdf.fill(255);
-        pdf.noStroke();
-        pdf.rect(0, 0, CANVAS_AREA_W, CANVAS_AREA_H); // Draw background covering the whole PDF page
-
-
-        for (let i = 0; i < placedItems.length; i++) {
-             let item = placedItems[i];
-
-              // Skip empty text items
-              if (item.type === 'text' && (!item.content || item.content.trim() === "" || item.content.trim() === TEXT_OPTIONS[0].trim())) {
-                 continue;
-             }
-             // Skip items with invalid scale or size
-             if (item.scaleFactor <= 0 || item.size <= 0) continue;
-
-            pdf.push(); // Save graphics state
-            // Calculate item's position relative to the PDF context origin (0,0),
-            // which corresponds to the top-left of the canvas area.
-            pdf.translate(item.x - CANVAS_AREA_X, item.y - CANVAS_AREA_Y);
-            pdf.rotate(item.rotation); // Apply item's rotation
-
-            pdf.scale(item.scaleFactor); // Apply item's scale
-
-            pdf.fill(item.color); // Apply item's color
-            pdf.noStroke(); // No stroke for the fill
-
-             // Get the item's font and text scale adjustment
-             let itemFont = item.font;
-             let itemTextScale = isNaN(item.textScaleAdjust) ? 0.2 : item.textScaleAdjust;
-             itemTextScale = max(itemTextScale, 1e-3); // Ensure text scale adjust is positive
-
-             // Check if itemFont is a truthy font object (and not the fallback string)
-             if (itemFont && itemFont !== baseFont) {
-                  if (typeof pdf.textFont === 'function') pdf.textFont(itemFont);
-             } else {
-                  // Fallback on PDF
-                  console.warn("savePDF: Item font invalid or not loaded. Using fallback font for item:", item);
-                   if (typeof pdf.textFont === 'function') pdf.textFont(baseFont); // Fallback to string
-             }
-
-            // Draw the shape primitive onto the PDF context
-            item.drawShapePrimitive(pdf, 0, 0, item.size, item.shapeType, item.type === 'text', itemTextScale);
-
-            pdf.pop(); // Restore graphics state
-        }
-
-         // Draw a border around the PDF page (representing the canvas area border)
-         pdf.push();
-         pdf.stroke(0); // Black border
-         pdf.strokeWeight(1); // 1 unit weight (usually pixels, but scales in PDF)
-         pdf.noFill();
-         pdf.rect(0, 0, CANVAS_AREA_W, CANVAS_AREA_H); // Draw border covering the whole PDF page
-         pdf.pop();
-
-
-        pdf.endRecord(); // Stop recording drawing commands
-
-        // Save the PDF file
-        pdf.save({
-            filename: 'myArtboard_pdf_' + generateTimestampString(),
-            width: CANVAS_AREA_W, // Specify the dimensions for the PDF page size
-            height: CANVAS_AREA_H,
-            margin: {top:0, right:0, bottom:0, left:0} // No margins
-        });
-
-
-     } catch(e) {
-         alert("An error occurred while generating PDF.");
-         console.error("Error generating PDF:", e);
-     } finally {
-         // Always remove the PDF context after use
-         if (pdf) {
-              // Ensure recording is stopped if it was started
-             if (typeof pdf.isRecording === 'boolean' && pdf.isRecording && typeof pdf.endRecord === 'function') {
-                 try{ pdf.endRecord(); } catch(endErr) { console.error("Error ending PDF record:", endErr); }
-             }
-             // Remove the PDF context
-             if (typeof pdf.remove === 'function') { try { pdf.remove(); } catch(remErr) { console.error("Error removing PDF:", remErr); } }
          }
      }
 }
