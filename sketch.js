@@ -1263,37 +1263,74 @@ function keyPressed() {
         return true;
     }
 
-    // If an item is grabbed and Delete or Backspace is pressed
-    if (grabbedItem && (keyCode === DELETE || keyCode === BACKSPACE)) {
-        // Remove the item from both lists
-        shapes = shapes.filter(s => s !== grabbedItem);
-        placedItems = placedItems.filter(s => s !== grabbedItem);
-        grabbedItem = null; // Clear grabbed item reference
-        // Reset input field
-        inputElement.value('');
-        inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-         inputElement.elt.blur(); // Remove focus from input if it had it
-        return false; // Prevent default browser behavior (like navigating back)
-    }
+    // --- MODIFIED SECTION FOR GRABBED ITEM ---
+    if (grabbedItem) {
+        const scaleIncrement = 1.08; // Scale up by 8%
+        const scaleDecrement = 1 / scaleIncrement; // Scale down by 1/1.08
+        const minScale = 0.05; // Minimum scale factor
+        const maxScale = 10.0; // Maximum scale factor
 
-     // If an item is grabbed and '+' or '-' is pressed (for scaling)
-     if (grabbedItem) {
-          const scaleIncrement = 1.08; // Scale up by 8%
-          const scaleDecrement = 1 / scaleIncrement; // Scale down by 1/1.08
-          const minScale = 0.05; // Minimum scale factor
-          const maxScale = 10.0; // Maximum scale factor
+        // SECTION A: CONTROL key is pressed (Primarily for SCALING)
+        if (keyIsDown(CONTROL)) {
+            // Check for Ctrl + Equals Key (for scale up) OR Ctrl + Numpad Plus
+            if (key === '=' || keyCode === 107) { // 107 is Numpad Add
+                grabbedItem.scaleFactor *= scaleIncrement;
+                grabbedItem.scaleFactor = min(grabbedItem.scaleFactor, maxScale);
+                return false; // Consume the event
+            }
+            // Check for Ctrl + Hyphen Key (for scale down) OR Ctrl + Numpad Minus
+            if (key === '-' || keyCode === 109) { // 109 is Numpad Subtract
+                grabbedItem.scaleFactor *= scaleDecrement;
+                grabbedItem.scaleFactor = max(grabbedItem.scaleFactor, minScale);
+                return false; // Consume the event
+            }
+            // If Ctrl is down but not for a recognized scaling combo,
+            // consume the event to prevent typing characters like "Ctrl+a" into the text "in the air".
+            // You could `return true` if you wanted to allow other browser Ctrl+ shortcuts.
+            return false;
+        }
+        // SECTION B: CONTROL key is NOT pressed (For item deletion or "in-air" text editing)
+        else {
+            // Sub-section B1: Item Deletion with DELETE key
+            if (keyCode === DELETE) {
+                shapes = shapes.filter(s => s !== grabbedItem);
+                placedItems = placedItems.filter(s => s !== grabbedItem);
+                grabbedItem = null; // Clear grabbed item reference
+                inputElement.value('');
+                inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+                inputElement.elt.blur(); // Remove focus from input
+                return false; // Consume the event
+            }
 
-         if (key === '+' || key === '=') { // '+' and '=' often share a key
-             grabbedItem.scaleFactor *= scaleIncrement;
-             grabbedItem.scaleFactor = min(grabbedItem.scaleFactor, maxScale);
-         }
-         if (key === '-') {
-             grabbedItem.scaleFactor *= scaleDecrement;
-             grabbedItem.scaleFactor = max(grabbedItem.scaleFactor, minScale);
-         }
-        return false; // Prevent default browser behavior
+            // Sub-section B2: "In-air" text editing for TEXT items
+            if (grabbedItem.type === 'text') {
+                if (keyCode === BACKSPACE) {
+                    if (grabbedItem.content.length > 0) {
+                        grabbedItem.content = grabbedItem.content.slice(0, -1); // Remove last character
+                        inputElement.value(grabbedItem.content); // Keep input field synced
+                    }
+                    return false; // Consume the event
+                }
+                // Check for printable characters (key.length === 1 is a good heuristic)
+                // This includes letters, numbers, symbols (like `+`, `-`, `=`, etc.), and space.
+                else if (key.length === 1) {
+                    grabbedItem.content += key;
+                    inputElement.value(grabbedItem.content); // Keep input field synced
+                    return false; // Consume the event
+                }
+                // For other non-Ctrl, non-Delete, non-Backspace, non-printable keys (e.g., Arrows, Enter, Shift alone)
+                // when a text item is grabbed, consume them to prevent default browser actions like scrolling.
+                return false;
+            }
+
+            // If it's a SHAPE (not text) and a key is pressed (not Ctrl, not Delete),
+            // consume it to prevent unexpected behavior or browser defaults.
+            return false;
+        }
     }
-    return true; // Allow default browser behavior if no item is grabbed
+    // --- END OF MODIFIED SECTION ---
+
+    return true; // Allow default browser behavior if no item is grabbed and input not focused
 }
 
 // Creates a new text shape from the input field content and adds it to floating shapes
