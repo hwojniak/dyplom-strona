@@ -66,9 +66,6 @@ let fontSenMedium;
 let fontSenRegular;
 let fontShareTechMonoRegular;
 let fontVT323Regular;
-
-// NEW: List to hold successfully loaded p5.Font objects
-let loadedFontsList = [];
 // --- END: Variables for ALL Loaded Fonts ---
 
 let logoImage;        // Variable to hold the loaded SVG logo
@@ -125,7 +122,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
   let l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
   if (l2 === 0) return dist(px, py, x1, y1);
 
-  let t = ((px - x1) * (x2 - x1) + (py - y1) * (py - y1)) / l2; // Corrected dot product calculation
+  let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
   t = max(0, min(1, t));
 
   let closestX = x1 + t * (x2 - x1);
@@ -137,8 +134,7 @@ function distToSegment(px, py, x1, y1, x2, y2) {
 // Gets local vertices for unrotated polygon shapes centered at (0,0).
 function getTriangleVertices(size) {
      if (isNaN(size) || size <= 0) return [];
-    let h = size * 0.8; // This scaling seems arbitrary, matching drawPrimitive might be better
-    // Let's match drawShapePrimitive's coordinates for consistency
+    let h = size * 0.8;
     return [{ x: 0, y: -size * 0.8 }, { x: -size * 0.8, y: size * 0.4 }, { x: size * 0.8, y: size * 0.4 }];
 }
 
@@ -151,8 +147,7 @@ function getSquareVertices(size) {
 function getPentagonVertices(size) {
      if (isNaN(size) || size <= 0) return [];
     let sides = 5;
-    let radius = size * 0.7; // Matching drawShapePrimitive
-     if (isNaN(radius) || radius <= 0) return [];
+    let radius = size * 0.7;
     let vertices = [];
     for (let i = 0; i < sides; i++) {
         let angle = TWO_PI / sides * i;
@@ -166,8 +161,7 @@ function getPentagonVertices(size) {
 function getHexagonVertices(size) {
      if (isNaN(size) || size <= 0) return [];
      let sides = 6;
-     let radius = size; // Matching drawShapePrimitive
-     if (isNaN(radius) || radius <= 0) return [];
+     let radius = size;
      let vertices = [];
      for (let i = 0; i < sides; i++) {
          let angle = TWO_PI / sides * i;
@@ -190,25 +184,16 @@ function isPointInConvexPolygon(px, py, vertices) {
   for (let i = 0; i < numVertices; i++) {
     let v1 = vertices[i], v2 = vertices[(i + 1) % numVertices];
      if (isNaN(v1.x) || isNaN(v1.y) || isNaN(v2.x) || isNaN(v2.y)) {
-         return false; // Invalid vertex data
+         return false;
      }
-    // Check if point is on the line (cross product is zero)
     cross_product = (v2.x - v1.x) * (py - v1.y) - (v2.y - v1.y) * (px - v1.x);
 
-    // Use a small epsilon for floating point comparisons
-    const epsilon = 1e-6;
-    if (cross_product > epsilon) has_pos = true;
-    if (cross_product < -epsilon) has_neg = true;
+    if (cross_product > 1e-6) has_pos = true;
+    if (cross_product < -1e-6) has_neg = true;
 
-    // If signs differ, point is outside (or on an edge, handled by isPointNearPolygonEdge)
     if (has_pos && has_neg) return false;
   }
 
-   // If we got here, all cross products have the same sign (or are zero).
-   // This means the point is inside or on an edge.
-   // We need to make sure it's not just *on* an edge if strict inside is required,
-   // but for mouse picking, inside OR on edge is usually fine.
-   // The separate isPointNearPolygonEdge handles the 'near edge' tolerance.
    return true;
 }
 
@@ -237,28 +222,19 @@ function getTextBounds(content, effectiveTextSize, baseFontRef) {
 
     // Ensure the measurement buffer exists and is configured
     if (!textMeasurePG) {
-         // Fallback estimate if measurement buffer is not available
         return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
     }
 
     try {
         // Apply font properties to the measurement buffer context
         // Use the font reference provided, or a default if none/invalid
-        // Check if baseFontRef is a p5.Font object or a string
-        if (baseFontRef) {
-            if (typeof baseFontRef === 'string') {
-                 if (textMeasurePG.textFont) textMeasurePG.textFont(baseFontRef);
-            } else if (baseFontRef.text && typeof baseFontRef.text === 'function') { // Check if it's a p5.Font object
-                 if (textMeasurePG.textFont) textMeasurePG.textFont(baseFontRef);
-            } else {
-                 // Invalid font reference, fall back
-                 if (textMeasurePG.textFont) textMeasurePG.textFont(baseFont); // Use baseFont string
-            }
+        if (baseFontRef && textMeasurePG.textFont) {
+             textMeasurePG.textFont(baseFontRef);
+        } else if (textMeasurePG.textFont){
+             textMeasurePG.textFont('monospace');
         } else {
-             // No font reference provided, fall back
-             if (textMeasurePG.textFont) textMeasurePG.textFont(baseFont); // Use baseFont string
+              return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
         }
-
 
         if (textMeasurePG.textSize) textMeasurePG.textSize(effectiveTextSize); else return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
         if (textMeasurePG.textAlign) textMeasurePG.textAlign(CENTER, CENTER); else return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
@@ -281,7 +257,6 @@ function getTextBounds(content, effectiveTextSize, baseFontRef) {
         return { w: textW, h: textH };
 
     } catch (e) {
-        // Fallback estimate on error
         return { w: effectiveTextSize * (content ? content.length : 0.5) * 0.6, h: effectiveTextSize * 1.2 };
     }
 }
@@ -306,7 +281,7 @@ class FloatingShape {
     this.scaleFactor = random(category.scaleRange[0], category.scaleRange[1]);
 
      let roughMaxDimension = this.calculateMaxEffectiveDimension();
-      let offScreenOffset = max(roughMaxDimension / 2 * this.scaleFactor, 100) + 50; // Ensure it spawns well off-screen
+      let offScreenOffset = max(roughMaxDimension / 2 * this.scaleFactor, 100) + 50;
 
     let minSpeed = 1, maxSpeed = 2;
 
@@ -326,7 +301,7 @@ class FloatingShape {
       case 2: // Bottom
         this.x = width * posAlong;
         this.y = height + offScreenOffset;
-        this.speedX = random(-1, 1) * maxSpeed * 0.5; // Allow movement in both directions
+        this.speedX = random(-1, -0.5) * maxSpeed * 0.5; // Slight bias left
         this.speedY = random(-maxSpeed, -minSpeed);
         break;
       case 3: // Left
@@ -341,42 +316,31 @@ class FloatingShape {
     this.rotationSpeed = random(-0.002, 0.002);
 
     let pickedColor;
-    this.type = random() < 0.7 ? 'shape' : 'text'; // 70% chance of being a shape
+    this.type = random() < 0.7 ? 'shape' : 'text';
 
     if (this.type === 'text') {
          let attempts = 0;
           do {
              pickedColor = color(random(PALETTE));
              attempts++;
-             // Avoid very light colors for text on black background
          } while (attempts < 10 && brightness(pickedColor) > 230);
 
-         this.shapeType = 'none'; // Text shapes don't have a polygon/circle shape
-         let initialContent = random(TEXT_OPTIONS.slice(1)); // Pick from actual options, not placeholder
-         // Ensure content is not empty or just the placeholder
+         this.shapeType = 'none';
+         let initialContent = random(TEXT_OPTIONS.slice(1));
          while(!initialContent || initialContent.trim() === "" || initialContent.trim() === TEXT_OPTIONS[0].trim()){
             initialContent = random(TEXT_OPTIONS.slice(1));
          }
          this.content = initialContent.trim();
          this.textScaleAdjust = category.textScaleAdjust;
-
-         // --- MODIFICATION START: Assign a random loaded font ---
-         if (loadedFontsList.length > 0) {
-             this.font = random(loadedFontsList); // Pick a random p5.Font object
-             // console.log(`RESET: Assigned font:`, this.font ? this.font.font.names.postscriptName : 'Fallback'); // Debug font name
-         } else {
-             this.font = baseFont; // Fallback to the string 'monospace'
-             // console.log(`RESET: Using fallback font:`, this.font); // Debug fallback
-         }
-         // --- MODIFICATION END ---
+         this.font = baseFont; // Default to baseFont initially (will be overridden if custom fonts load)
 
 
     } else { // type is 'shape'
         this.shapeType = random(['triangle', 'square', 'pentagon', 'hexagon', 'circle']);
         pickedColor = color(random(PALETTE));
-        this.content = null; // Shapes don't have text content
-        this.textScaleAdjust = 0; // Not applicable to shapes
-        this.font = null; // Shapes don't have a font
+        this.content = null;
+        this.textScaleAdjust = 0;
+        this.font = null;
     }
 
     this.color = pickedColor;
@@ -389,31 +353,27 @@ class FloatingShape {
   }
 
    calculateMaxEffectiveDimension() {
-        let dimension = this.size || 50; // Default size if size is invalid
+        let dimension = this.size || 50;
         if (this.type === 'text' && this.content && this.content.trim() !== "" && this.content.trim() !== TEXT_OPTIONS[0].trim()) {
              let effectiveTextSize = (this.size || 1) * (this.textScaleAdjust || 0.2);
-              // Pass the specific font to getTextBounds
               let textBounds = getTextBounds(this.content, effectiveTextSize, this.font || baseFont);
-              dimension = sqrt(sq(textBounds.w) + sq(textBounds.h)); // Use diagonal as rough max dimension
+              dimension = sqrt(sq(textBounds.w) + sq(textBounds.h));
 
         } else if (this.type === 'shape' && this.shapeType) {
-             // Estimate max dimension based on shape type and size
              switch(this.shapeType) {
-                  case 'circle': dimension = this.size * 2; break; // Diameter
-                  case 'square': dimension = this.size * Math.SQRT2; break; // Diagonal
-                  case 'triangle': dimension = this.size * 1.6; break; // Estimate based on height/width
-                  case 'pentagon': dimension = this.size * 0.7 * 2; break; // Diameter of circumcircle
-                  case 'hexagon': dimension = this.size * 2; break; // Diameter of circumcircle
-                  default: dimension = this.size * 2; break; // Default to diameter estimate
+                  case 'circle': dimension = this.size * 2; break;
+                  case 'square': dimension = this.size * Math.SQRT2; break;
+                  case 'triangle': dimension = this.size * 1.2; break;
+                  case 'pentagon': dimension = this.size * 0.7 * 2; break;
+                  case 'hexagon': dimension = this.size * 2; break;
+                  default: dimension = this.size; break;
              }
-             // Ensure a minimum size even if calculations fail
-             dimension = max(dimension, this.size * 1.5); // Ensure it's at least 1.5x base size
+             dimension = max(dimension, this.size * 1.5);
         } else {
-            // Fallback if type is unknown or size is invalid
             dimension = this.size || 100;
         }
 
-        dimension = max(dimension, 1); // Ensure dimension is positive
+        dimension = max(dimension, 1);
 
         return dimension;
   }
@@ -426,7 +386,6 @@ class FloatingShape {
 
          this.rotation += this.rotationSpeed;
 
-         // Keep rotation within [0, TWO_PI)
          this.rotation = (this.rotation % TWO_PI + TWO_PI) % TWO_PI;
      }
   }
@@ -434,12 +393,10 @@ class FloatingShape {
    isReallyOffScreen() {
         let maxEffectiveDimension = this.calculateMaxEffectiveDimension();
         if (isNaN(maxEffectiveDimension) || maxEffectiveDimension <= 0) {
-             // If dimension calculation failed, use a large buffer to prevent premature removal
-             return this.x < -width || this.x > width * 2 || this.y < -height || this.y > height * 2;
+             return false;
         }
       let effectiveRadius = maxEffectiveDimension / 2 * this.scaleFactor;
-      // Use a buffer around the window edges
-      let windowBuffer = max(width, height) * 0.5; // Buffer is 50% of the larger window dimension
+      let windowBuffer = max(width, height) * 0.5;
 
       return this.x < -windowBuffer - effectiveRadius || this.x > width + windowBuffer + effectiveRadius ||
              this.y < -windowBuffer - effectiveRadius || this.y > height + windowBuffer + effectiveRadius;
@@ -449,63 +406,52 @@ class FloatingShape {
   updateLanding() {
     if(this.isPlacing && !this.isGrabbed) {
         let elapsed = frameCount - this.landFrame;
-        let duration = 45; // Duration of the landing animation in frames
+        let duration = 45;
         if (elapsed <= duration) {
             let t = map(elapsed, 0, duration, 0, 1);
-            let easedT = t * t * (3 - 2 * t); // Smoothstep easing
-            let pulseScale = 1 + easedT * 0.07; // Scale up by 7% and back
+            let easedT = t * t * (3 - 2 * t);
+            let pulseScale = 1 + easedT * 0.07;
             this.tempScaleEffect = pulseScale;
         } else {
-            // Animation finished
             this.isPlacing = false;
             this.tempScaleEffect = 1;
         }
     } else if (!this.isPlacing && this.tempScaleEffect !== 1) {
-         // If no longer placing, reset scale effect immediately
          this.tempScaleEffect = 1;
     }
   }
 
-   // Display method draws the shape onto a graphics context (main canvas or canvasPG)
    display(graphics, showGrabEffect = false, offsetX = 0, offsetY = 0) {
-     // Basic checks for valid graphics context
      if (!graphics || typeof graphics.push !== 'function' || typeof graphics.translate !== 'function' || typeof graphics.rotate !== 'function' || typeof graphics.scale !== 'function') {
         return;
     }
 
-    // Don't draw empty text shapes unless they are grabbed (so you can type in them)
     if (this.type === 'text' && (!this.content || this.content.trim() === "" || this.content.trim() === TEXT_OPTIONS[0].trim())) {
-         if (!this.isGrabbed || graphics !== this) { // Only draw if grabbed AND drawing on the main canvas (this)
+         if (!this.isGrabbed || graphics !== this) {
              return;
          }
     }
 
     graphics.push();
-    // Translate relative to the graphics context's origin, accounting for canvas area offset
     graphics.translate(this.x - offsetX, this.y - offsetY);
     graphics.rotate(this.rotation);
 
-    // Apply scale, including the temporary landing effect scale
     let currentDisplayScale = this.scaleFactor * (!this.isGrabbed && this.isPlacing ? this.tempScaleEffect : 1);
     graphics.scale(currentDisplayScale);
 
-     // Draw grab effect outline if requested and drawing on the main canvas
      if (showGrabEffect && graphics === this) {
          graphics.drawingContext.shadowBlur = 40;
          graphics.drawingContext.shadowColor = 'rgba(255, 255, 255, 0.9)';
          graphics.stroke(255, 255, 255, 200);
          graphics.strokeWeight(3);
          graphics.noFill();
-         // Draw the shape primitive for the outline
          this.drawShapePrimitive(graphics, 0, 0, this.size, this.shapeType, this.type === 'text', this.textScaleAdjust);
-         graphics.drawingContext.shadowBlur = 0; // Reset shadow
+         graphics.drawingContext.shadowBlur = 0;
     }
 
-    // Draw the main fill of the shape/text
     graphics.fill(this.color);
     graphics.noStroke();
 
-    // Draw the core shape geometry or text
     this.drawShapePrimitive(graphics, 0, 0, this.size, this.shapeType, this.type === 'text', this.textScaleAdjust);
     graphics.pop();
   }
@@ -515,35 +461,27 @@ class FloatingShape {
   // This function uses methods provided by the graphics context (e.g., graphics.rect, graphics.text).
   drawShapePrimitive(graphics, px, py, psize, pshapeType, isText = false, textScaleAdjust = 0.2) {
         if (!graphics || typeof graphics.rectMode !== 'function' || typeof graphics.text !== 'function') {
-             return; // Invalid graphics context
+             return;
          }
 
-         // Basic validation for size, especially for shapes
-         if (!isText && (isNaN(psize) || psize <= 0)) {
-             return; // Cannot draw shape with invalid size
+         if (isNaN(px) || isNaN(py) || isNaN(psize) || psize <= 0) {
+             if(!isText) return;
          }
 
         if (isText) {
              // Apply text properties to the provided graphics context
-             // Use the shape's assigned font
-             let currentFont = this.font;
-             // Check if currentFont is a p5.Font object before using textFont method
-             if (currentFont && typeof currentFont.text === 'function') {
-                 if (typeof graphics.textFont === 'function') graphics.textFont(currentFont);
-             } else {
-                  // Fallback to baseFont string if shape font is invalid or not a p5.Font
-                  if (typeof graphics.textFont === 'function') graphics.textFont(baseFont);
+             // Ensure textFont method exists on the graphics context
+             if (typeof graphics.textFont === 'function') {
+                 graphics.textFont(this.font || baseFont);
              }
-
 
               if (typeof graphics.textAlign === 'function') {
                  graphics.textAlign(CENTER, CENTER);
               }
 
              let effectiveTextSize = psize * textScaleAdjust;
-             effectiveTextSize = max(effectiveTextSize, 1); // Ensure minimum text size
-              if (effectiveTextSize === Infinity || isNaN(effectiveTextSize)) effectiveTextSize = 16; // Fallback size
-
+             effectiveTextSize = max(effectiveTextSize, 1);
+              if (effectiveTextSize === Infinity || isNaN(effectiveTextSize)) effectiveTextSize = 16;
 
               if (typeof graphics.textSize === 'function') {
                  graphics.textSize(effectiveTextSize);
@@ -552,6 +490,9 @@ class FloatingShape {
              graphics.text(this.content, px, py); // Draw text centered at px, py
 
          } else { // It's a shape
+              if (isNaN(psize) || psize <= 0) {
+                   return;
+               }
               graphics.rectMode(CENTER);
 
              switch (pshapeType) {
@@ -567,7 +508,7 @@ class FloatingShape {
                case 'pentagon':
                   graphics.beginShape();
                   let sidesP = 5; let radiusP = psize * 0.7;
-                  if (isNaN(radiusP) || radiusP <= 0) { break; } // Validate radius
+                  if (isNaN(radiusP) || radiusP <= 0) { break; }
                   for (let i = 0; i < sidesP; i++) {
                      let angle = TWO_PI / sidesP * i;
                      let sx = cos(angle - HALF_PI) * radiusP;
@@ -579,7 +520,7 @@ class FloatingShape {
                case 'hexagon':
                  graphics.beginShape();
                  let sidesH = 6; let radiusH = psize;
-                 if (isNaN(radiusH) || radiusH <= 0) { break; } // Validate radius
+                 if (isNaN(radiusH) || radiusH <= 0) { break; }
                  for (let i = 0; i < sidesH; i++) {
                     let angle = TWO_PI / sidesH * i;
                     let sx = cos(angle) * radiusH;
@@ -589,19 +530,17 @@ class FloatingShape {
                  graphics.endShape(CLOSE);
                  break;
                default:
-                 break; // Unknown shape type
+                 break;
              }
          }
    }
 
   isMouseOver(mx, my) {
-       // Basic validation of shape properties
        if (isNaN(this.x) || isNaN(this.y) || isNaN(mx) || isNaN(my) || isNaN(this.rotation) ||
            isNaN(this.scaleFactor) || isNaN(this.size) || this.scaleFactor <= 0 || this.size <= 0) {
             return false;
        }
 
-        // Don't detect mouse over for empty text shapes unless grabbed (allows clicking to grab/edit)
         if (this.type === 'text' && (!this.content || this.content.trim() === "" || this.content.trim() === TEXT_OPTIONS[0].trim()) && !this.isGrabbed) {
             return false;
         }
@@ -609,33 +548,28 @@ class FloatingShape {
        let currentDisplayScale = this.scaleFactor * this.tempScaleEffect;
        if (currentDisplayScale <= 0) return false;
 
-       // Transform mouse coordinates to the shape's local coordinate system
        let localMouse = transformPointToLocal(mx, my, this.x, this.y, this.rotation, currentDisplayScale);
        let localMx = localMouse.x, localMy = localMouse.y;
 
-       if (isNaN(localMx) || isNaN(localMy)) return false; // Transformation failed
+       if (isNaN(localMx) || isNaN(localMy)) return false;
 
-        // Calculate local tolerance based on the display scale
         let localTolerance = CLICK_TOLERANCE / currentDisplayScale;
-         localTolerance = max(localTolerance, 3); // Ensure a minimum local tolerance
+         localTolerance = max(localTolerance, 3);
 
        if (this.type === 'text') {
            let effectiveTextSize = this.size * this.textScaleAdjust;
            if (isNaN(effectiveTextSize) || effectiveTextSize <= 0) {
-                return false; // Cannot measure text bounds with invalid size
+                return false;
             }
-           // Get text bounds using the shape's specific font
            let textBounds = getTextBounds(this.content, effectiveTextSize, this.font || baseFont);
-           if (textBounds.w <= 0 || textBounds.h <= 0) return false; // Cannot detect if bounds are invalid
+           if (textBounds.w <= 0 || textBounds.h <= 0) return false;
 
-           // Check if local mouse point is within the text bounds (with tolerance)
            return isPointInAxisAlignedRect(localMx, localMy, textBounds.w, textBounds.h, localTolerance);
 
        } else { // type is 'shape'
              if (isNaN(this.size) || this.size <= 0) {
-                   return false; // Cannot detect shape with invalid size
+                   return false;
              }
-           // Check collision based on shape type
            switch (this.shapeType) {
               case 'circle':
                  return dist(localMx, localMy, 0, 0) <= this.size + localTolerance;
@@ -644,23 +578,19 @@ class FloatingShape {
               case 'triangle':
                   let triVertices = getTriangleVertices(this.size);
                    if (!Array.isArray(triVertices) || triVertices.length < 3) { return false; }
-                  // Check if inside OR near edge
                   if (isPointInConvexPolygon(localMx, localMy, triVertices)) return true;
                   return isPointNearPolygonEdge(localMx, localMy, triVertices, localTolerance);
               case 'pentagon':
                   let pentVertices = getPentagonVertices(this.size);
                   if (!Array.isArray(pentVertices) || pentVertices.length < 5) { return false; }
-                   // Check if inside OR near edge
                   if (isPointInConvexPolygon(localMx, localMy, pentVertices)) return true;
                   return isPointNearPolygonEdge(localMx, localMy, pentVertices, localTolerance);
               case 'hexagon':
                    let hexVertices = getHexagonVertices(this.size);
                    if (!Array.isArray(hexVertices) || hexVertices.length < 6) { return false; }
-                   // Check if inside OR near edge
                   if (isPointInConvexPolygon(localMx, localMy, hexVertices)) return true;
                   return isPointNearPolygonEdge(localMx, localMy, hexVertices, localTolerance);
               default:
-                  // Fallback for unknown shape type (e.g., treat as circle)
                    return dist(localMx, localMy, 0, 0) <= this.size * 0.7 + localTolerance;
            }
        }
@@ -671,74 +601,84 @@ class FloatingShape {
 
 
 function preload() {
-   baseFont = 'monospace'; // Default fallback font string
+   baseFont = 'monospace';
 
   // --- START: Load ALL specific fonts and logo ---
-  // Providing empty function callbacks to prevent TypeError and handle async loading
-  fontBangersRegular = loadFont('assets/Bangers-Regular.ttf', () => {console.log('Font loaded: Bangers-Regular');}, (err) => {console.error('Failed to load font: Bangers-Regular', err);});
-  fontBoogalooRegular = loadFont('assets/Boogaloo-Regular.ttf', () => {console.log('Font loaded: Boogaloo-Regular');}, (err) => {console.error('Failed to load font: Boogaloo-Regular', err);});
-  fontBreeSerifRegular = loadFont('assets/BreeSerif-Regular.ttf', () => {console.log('Font loaded: BreeSerif-Regular');}, (err) => {console.error('Failed to load font: BreeSerif-Regular', err);});
-  fontCaveatBrushRegular = loadFont('assets/CaveatBrush-Regular.ttf', () => {console.log('Font loaded: CaveatBrush-Regular');}, (err) => {console.error('Failed to load font: CaveatBrush-Regular', err);});
-  fontCherryBombOneRegular = loadFont('assets/CherryBombOne-Regular.ttf', () => {console.log('Font loaded: CherryBombOne-Regular');}, (err) => {console.error('Failed to load font: CherryBombOne-Regular', err);});
-  fontCinzelDecorativeBlack = loadFont('assets/CinzelDecorative-Black.ttf', () => {console.log('Font loaded: CinzelDecorative-Black');}, (err) => {console.error('Failed to load font: CinzelDecorative-Black', err);});
-  fontCinzelDecorativeBold = loadFont('assets/CinzelDecorative-Bold.ttf', () => {console.log('Font loaded: CinzelDecorative-Bold', );}, (err) => {console.error('Failed to load font: CinzelDecorative-Bold', err);});
-  fontCinzelDecorativeRegular = loadFont('assets/CinzelDecorative-Regular.ttf', () => {console.log('Font loaded: CinzelDecorative-Regular');}, (err) => {console.error('Failed to load font: CinzelDecorative-Regular', err);});
-  fontDynaPuffBold = loadFont('assets/DynaPuff-Bold.ttf', () => {console.log('Font loaded: DynaPuff-Bold');}, (err) => {console.error('Failed to load font: DynaPuff-Bold', err);});
-  fontDynaPuffMedium = loadFont('assets/DynaPuff-Medium.ttf', () => {console.log('Font loaded: DynaPuff-Medium');}, (err) => {console.error('Failed to load font: DynaPuff-Medium', err);});
-  fontDynaPuffRegular = loadFont('assets/DynaPuff-Regular.ttf', () => {console.log('Font loaded: DynaPuff-Regular');}, (err) => {console.error('Failed to load font: DynaPuff-Regular', err);});
-  fontInterBold = loadFont('assets/Inter-Bold.ttf', () => {console.log('Font loaded: Inter-Bold');}, (err) => {console.error('Failed to load font: Inter-Bold', err);});
-  fontInterRegular = loadFont('assets/Inter-Regular.ttf', () => {console.log('Font loaded: Inter-Regular');}, (err) => {console.error('Failed to load font: Inter-Regular', err);});
-  fontPixelifySansRegular = loadFont('assets/PixelifySans-Regular.ttf', () => {console.log('Font loaded: PixelifySans-Regular');}, (err) => {console.error('Failed to load font: PixelifySans-Regular', err);});
-  fontSenBold = loadFont('assets/Sen-Bold.ttf', () => {console.log('Font loaded: Sen-Bold');}, (err) => {console.error('Failed to load font: Sen-Bold', err);});
-  fontSenMedium = loadFont('assets/Sen-Medium.ttf', () => {console.log('Font loaded: Sen-Medium');}, (err) => {console.error('Failed to load font: Sen-Medium', err);});
-  fontSenRegular = loadFont('assets/Sen-Regular.ttf', () => {console.log('Font loaded: Sen-Regular');}, (err) => {console.error('Failed to load font: Sen-Regular', err);});
-  fontShareTechMonoRegular = loadFont('assets/ShareTechMono-Regular.ttf', () => {console.log('Font loaded: ShareTechMono-Regular');}, (err) => {console.error('Failed to load font: ShareTechMono-Regular', err);});
-  fontVT323Regular = loadFont('assets/VT323-Regular.ttf', () => {console.log('Font loaded: VT323-Regular');}, (err) => {console.error('Failed to load font: VT323-Regular', err);});
+  // Providing empty function callbacks to prevent TypeError
+  fontBangersRegular = loadFont('assets/Bangers-Regular.ttf', () => {}, (err) => {});
+  fontBoogalooRegular = loadFont('assets/Boogaloo-Regular.ttf', () => {}, (err) => {});
+  fontBreeSerifRegular = loadFont('assets/BreeSerif-Regular.ttf', () => {}, (err) => {});
+  fontCaveatBrushRegular = loadFont('assets/CaveatBrush-Regular.ttf', () => {}, (err) => {});
+  fontCherryBombOneRegular = loadFont('assets/CherryBombOne-Regular.ttf', () => {}, (err) => {});
+  fontCinzelDecorativeBlack = loadFont('assets/CinzelDecorative-Black.ttf', () => {}, (err) => {});
+  fontCinzelDecorativeBold = loadFont('assets/CinzelDecorative-Bold.ttf', () => {}, (err) => {});
+  fontCinzelDecorativeRegular = loadFont('assets/CinzelDecorative-Regular.ttf', () => {}, (err) => {});
+  fontDynaPuffBold = loadFont('assets/DynaPuff-Bold.ttf', () => {}, (err) => {});
+  fontDynaPuffMedium = loadFont('assets/DynaPuff-Medium.ttf', () => {}, (err) => {});
+  fontDynaPuffRegular = loadFont('assets/DynaPuff-Regular.ttf', () => {}, (err) => {});
+  fontInterBold = loadFont('assets/Inter-Bold.ttf', () => {}, (err) => {});
+  fontInterRegular = loadFont('assets/Inter-Regular.ttf', () => {}, (err) => {});
+  fontPixelifySansRegular = loadFont('assets/PixelifySans-Regular.ttf', () => {}, (err) => {});
+  fontSenBold = loadFont('assets/Sen-Bold.ttf', () => {}, (err) => {});
+  fontSenMedium = loadFont('assets/Sen-Medium.ttf', () => {}, (err) => {});
+  fontSenRegular = loadFont('assets/Sen-Regular.ttf', () => {}, (err) => {});
+  fontShareTechMonoRegular = loadFont('assets/ShareTechMono-Regular.ttf', () => {}, (err) => {});
+  fontVT323Regular = loadFont('assets/VT323-Regular.ttf', () => {}, (err) => {});
 
   // Provided empty function callbacks for loadImage as well
-  logoImage = loadImage('assets/placeholder-logo.svg', () => {console.log('Logo loaded');}, (err) => {console.error('Failed to load logo', err);});
+  logoImage = loadImage('assets/placeholder-logo.svg', () => {}, (err) => {});
 
   // --- END: Variables for ALL Loaded Fonts ---
 }
-let canvasPG; // Graphics buffer for the central canvas area
-let initialPositioningDone = false; // Flag to ensure UI positioning happens once
+let canvasPG;
+let initialPositioningDone = false;
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
     if (width <= 0 || height <= 0) {
-         console.warn("Canvas dimensions are zero or negative. Skipping setup.");
          return;
      }
 
-  SNAP_INCREMENT_RADIANS = radians(15); // Snap rotation to 15 degrees
+  SNAP_INCREMENT_RADIANS = radians(15);
 
-    // Initialize the central canvas graphics buffer
-    canvasPG = createGraphics(10, 10); // Start small, will be resized in positionDOMElementsAndCanvasPG
+    canvasPG = createGraphics(10, 10);
     canvasPG.background(255);
 
-    // Initialize the text measurement graphics buffer
     textMeasurePG = createGraphics(1, 1);
-    // Set initial text properties for measurement buffer
-    if (typeof textMeasurePG.textFont === 'function') textMeasurePG.textFont(baseFont); // Use baseFont string initially
-    if (typeof textMeasurePG.textAlign === 'function') textMeasurePG.textAlign(CENTER, CENTER);
-    if (typeof textMeasurePG.textSize === 'function') textMeasurePG.textSize(16); // Default size for measurement setup
 
-    // --- MODIFICATION START: Populate the list of actually loaded fonts ---
-    const potentialFonts = [
-        fontBangersRegular, fontBoogalooRegular, fontBreeSerifRegular, fontCaveatBrushRegular,
-        fontCherryBombOneRegular, fontCinzelDecorativeBlack, fontCinzelDecorativeBold,
-        fontCinzelDecorativeRegular, fontDynaPuffBold, fontDynaPuffMedium, fontDynaPuffRegular,
-        fontInterBold, fontInterRegular, fontPixelifySansRegular, fontSenBold, fontSenMedium,
-        fontSenRegular, fontShareTechMonoRegular, fontVT323Regular
-    ];
+    // --- Set initial textMeasurePG font ---
+    if (fontSenRegular && typeof fontSenRegular.text === 'function') { // Example: Use Sen-Regular as the default for measurement
+        textMeasurePG.textFont(fontSenRegular);
+    } else if (baseFont && typeof textMeasurePG.textFont === 'function') {
+        textMeasurePG.textFont(baseFont); // Fallback to monospace string
+    }
+    // --- End Set initial textMeasurePG font ---
 
-    // Filter for fonts that loaded successfully AND have the necessary methods (like .text for p5.Font)
-    loadedFontsList = potentialFonts.filter(f => f && typeof f.text === 'function');
-    console.log(`SETUP: Found ${loadedFontsList.length} usable p5.Font objects.`);
-    // --- MODIFICATION END ---
+    // --- DEBUG: Log font variable states after preload ---
+    console.log("SETUP: Font loading status:");
+    console.log("fontBangersRegular:", fontBangersRegular ? "Loaded" : "Failed");
+    console.log("fontBoogalooRegular:", fontBoogalooRegular ? "Loaded" : "Failed");
+    console.log("fontBreeSerifRegular:", fontBreeSerifRegular ? "Loaded" : "Failed");
+    console.log("fontCaveatBrushRegular:", fontCaveatBrushRegular ? "Loaded" : "Failed");
+    console.log("fontCherryBombOneRegular:", fontCherryBombOneRegular ? "Loaded" : "Failed");
+    console.log("fontCinzelDecorativeBlack:", fontCinzelDecorativeBlack ? "Loaded" : "Failed");
+    console.log("fontCinzelDecorativeBold:", fontCinzelDecorativeBold ? "Loaded" : "Failed");
+    console.log("fontCinzelDecorativeRegular:", fontCinzelDecorativeRegular ? "Loaded" : "Failed");
+    console.log("fontDynaPuffBold:", fontDynaPuffBold ? "Loaded" : "Failed");
+    console.log("fontDynaPuffMedium:", fontDynaPuffMedium ? "Loaded" : "Failed");
+    console.log("fontDynaPuffRegular:", fontDynaPuffRegular ? "Loaded" : "Failed");
+    console.log("fontInterBold:", fontInterBold ? "Loaded" : "Failed");
+    console.log("fontInterRegular:", fontInterRegular ? "Loaded" : "Failed");
+    console.log("fontPixelifySansRegular:", fontPixelifySansRegular ? "Loaded" : "Failed");
+    console.log("fontSenBold:", fontSenBold ? "Loaded" : "Failed");
+    console.log("fontSenMedium:", fontSenMedium ? "Loaded" : "Failed");
+    console.log("fontSenRegular:", fontSenRegular ? "Loaded" : "Failed");
+    console.log("fontShareTechMonoRegular:", fontShareTechMonoRegular ? "Loaded" : "Failed");
+    console.log("fontVT323Regular:", fontVT323Regular ? "Loaded" : "Failed");
+     console.log("logoImage:", logoImage && typeof logoImage.width === 'number' && logoImage.width > 0 ? "Loaded" : "Failed or Invalid");
+    // --- END DEBUG ---
 
 
-  // Create DOM elements
   inputElement = createInput();
   inputElement.value('');
   inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
@@ -749,14 +689,12 @@ function setup() {
                .style("background-color", color(255, 255, 255, 200))
                .style("font-size", "14px")
                .style("color", color(50))
-                .style("box-sizing", "border-box"); // Include padding/border in element's total width/height
+                .style("box-sizing", "border-box");
 
-  // Add event listener for Enter key on the input field
   inputElement.elt.addEventListener('keypress', function(event) {
-    // Check if the key pressed was Enter and the event originated from this input element
     if (event.key === 'Enter' && event.target === this) {
       addNewTextShapeFromInput();
-      event.preventDefault(); // Prevent default form submission or newline
+      event.preventDefault();
     }
   });
 
@@ -764,9 +702,8 @@ function setup() {
   saveHighResPNGButton = createButton("SAVE HI-RES PNG");
   savePDFButton = createButton("SAVE PDF");
   clearButton = createButton("CLEAR");
-  refreshButton = createButton("RELOAD FLOATING"); // Changed text for clarity
+  refreshButton = createButton("REFRESH");
 
-   // Apply consistent styles to buttons
    const baseButtonStyle = {
        padding: "5px 10px",
        border: "1px solid #888",
@@ -774,98 +711,85 @@ function setup() {
        "background-color": "rgba(200, 200, 200, 0.7)",
        color: "rgb(50, 50, 50)",
        outline: "none",
-       cursor: "pointer",
-       "font-size": "14px", // Added font size for consistency
-       "box-sizing": "border-box" // Include padding/border
+       cursor: "pointer"
    };
 
    [savePNGButton, saveHighResPNGButton, savePDFButton, clearButton, refreshButton].forEach(btn => {
-       if (btn) { // Check if button was successfully created
+       if (btn) {
            Object.keys(baseButtonStyle).forEach(styleKey => {
                 btn.style(styleKey, baseButtonStyle[styleKey]);
            });
-             // Add hover effects
              btn.elt.addEventListener('mouseover', function() { this.style.backgroundColor = 'rgba(220, 220, 220, 0.9)'; });
              btn.elt.addEventListener('mouseout', function() { this.style.backgroundColor = baseButtonStyle["background-color"]; });
        }
    });
 
-   // Assign click handlers
    if(savePNGButton) savePNGButton.elt.addEventListener('click', saveCanvasAreaAsPNG);
    if(saveHighResPNGButton) saveHighResPNGButton.elt.addEventListener('click', saveCanvasAreaAsHighResPNG);
    if(savePDFButton) savePDFButton.elt.addEventListener('click', saveCanvasAreaAsPDF);
    if(clearButton) clearButton.elt.addEventListener('click', restartAll);
-   if(refreshButton) refreshButton.elt.addEventListener('click', resetFloatingShapes); // Changed function name for clarity
+   if(refreshButton) refreshButton.elt.addEventListener('click', resetRandom);
 
+   initialPositioningDone = false;
 
-   initialPositioningDone = false; // Will be set true after first positioning
-
-  // Create initial floating shapes
   while (shapes.length < 30) { shapes.push(new FloatingShape()); }
 }
 
 
 function draw() {
-    // Position UI elements and resize canvasPG only once or on resize
     if (!initialPositioningDone) {
         positionDOMElementsAndCanvasPG();
         initialPositioningDone = true;
     }
 
-  background(0); // Draw black background for the whole window
+  background(0);
 
   // --- Update shapes ---
   for (let i = shapes.length - 1; i >= 0; i--) {
       let shape = shapes[i];
-     if (!shape.isGrabbed && !shape.isPlacing) { shape.update(); } // Update position/rotation if not grabbed/placing
-     shape.updateLanding(); // Update landing animation scale
-     // Remove shapes that are far off-screen and not grabbed/placing
+     if (!shape.isGrabbed && !shape.isPlacing) { shape.update(); }
+     shape.updateLanding();
      if (!shape.isGrabbed && !shape.isPlacing && shape.isReallyOffScreen()) {
           shapes.splice(i, 1);
       }
   }
 
-  // Add new shapes if the count drops below a threshold
   while (shapes.length < 20) { shapes.push(new FloatingShape()); }
 
 
   // --- Update placed items ---
   for (let item of placedItems) {
-      item.updateLanding(); // Update landing animation for placed items
+      item.updateLanding();
   }
 
   // --- Draw floating shapes on main canvas (behind artboard) ---
-  // Draw shapes that are not currently grabbed
   for (let i = 0; i < shapes.length; i++) {
       let shape = shapes[i];
       if (shape !== grabbedItem) {
-          shape.display(this, false, 0, 0); // Draw on main canvas (this), no grab effect, no offset
+          shape.display(this, false, 0, 0);
       }
   }
 
 
   // --- Central White Canvas Area Drawing (Rendered to canvasPG) ---
   if(canvasPG){
-     canvasPG.clear(); // Clear the buffer
-     canvasPG.background(255); // Draw white background for the artboard
+     canvasPG.clear();
+     canvasPG.background(255);
 
     // Draw placed items onto canvasPG
     for (let i = 0; i < placedItems.length; i++) {
         let item = placedItems[i];
-        // Draw on canvasPG, no grab effect, with offset (canvas area position relative to window)
         item.display(canvasPG, false, CANVAS_AREA_X, CANVAS_AREA_Y);
     }
 
-    // Draw the canvasPG buffer onto the main canvas at the calculated position
     image(canvasPG, CANVAS_AREA_X, CANVAS_AREA_Y);
   } else {
-       // Display error message if canvasPG is not available
        fill(255, 100, 100, 100);
        rect(CANVAS_AREA_X, CANVAS_AREA_Y, CANVAS_AREA_W, CANVAS_AREA_H);
        fill(0); textAlign(CENTER, CENTER); text("Error: Canvas area buffer missing.", CANVAS_AREA_X + CANVAS_AREA_W/2, CANVAS_AREA_Y + CANVAS_AREA_H/2);
   }
 
-  // Draw border around canvas area on the main canvas
+  // Draw border around canvas area
   stroke(200);
   strokeWeight(1);
   noFill();
@@ -874,16 +798,13 @@ function draw() {
 
   // Draw grabbed item on top of everything else on the main canvas
   if (grabbedItem) {
-     // Smoothly move grabbed item towards mouse position
      grabbedItem.x = lerp(grabbedItem.x, mouseX, 0.4);
      grabbedItem.y = lerp(grabbedItem.y, mouseY, 0.4);
-     grabbedItem.solidify(); // Stop its own movement
-     grabbedItem.isPlacing = false; // Cancel landing animation if it was placing
-      // Update text content from input field if it's a text item
+     grabbedItem.solidify();
+     grabbedItem.isPlacing = false;
       if (grabbedItem.type === 'text') {
            grabbedItem.content = inputElement.value();
       }
-     // Draw on main canvas (this), with grab effect, no offset
      grabbedItem.display(this, true, 0, 0);
   }
 
@@ -897,7 +818,6 @@ function draw() {
     let logoCenterY = HEADER_HEIGHT / 2;
     let logoTargetWidth = 150;
 
-    // Check if logoImage is loaded and valid
     if (logoImage && typeof logoImage.width === 'number' && logoImage.width > 0) {
          let logoAspectRatio = logoImage.height / logoImage.width;
          let logoTargetHeight = logoTargetWidth * logoAspectRatio;
@@ -905,293 +825,234 @@ function draw() {
          let logoDrawX = logoX;
          let logoDrawY = logoCenterY - logoTargetHeight / 2;
 
-         imageMode(CORNER); // Draw image from its top-left corner
+         imageMode(CORNER);
          image(logoImage, logoDrawX, logoDrawY, logoTargetWidth, logoTargetHeight);
 
     } else {
-         // Draw fallback text if logo failed to load
          fill(50);
          textSize(20);
          textAlign(LEFT, CENTER);
           // Use textFont directly in the main drawing context
-          // Use Sen-Regular if loaded, otherwise fallback string
           if (fontSenRegular && typeof fontSenRegular.text === 'function') {
               textFont(fontSenRegular);
           } else {
-              textFont(baseFont); // Use monospace string
+              textFont(baseFont);
           }
-         text("COMPOSTER", logoX, logoCenterY); // Use "COMPOSTER" as fallback text
+         text("PLACEHOLDER\nLOGO", logoX, logoCenterY);
     }
     // --- END: Draw the Header Logo ---
 }
 
-// Positions the central canvas area and UI elements based on window size
 function positionDOMElementsAndCanvasPG() {
 
-     const minCanvasW = 300; // Minimum width for the canvas area
-     // Calculate target width, keeping it within limits and responsive to window width
+     const minCanvasW = 300;
      const adjustedCanvasW = min(CANVAS_AREA_W_BASE, max(minCanvasW, windowWidth * 0.95));
 
     let targetCANVAS_AREA_W = adjustedCanvasW;
-    let targetCANVAS_AREA_H = adjustedCanvasW * (5 / 4); // Maintain 4:5 aspect ratio
+    let targetCANVAS_AREA_H = adjustedCanvasW * (5 / 4);
 
-    let minSideMargin = 15; // Minimum margin on the sides
-    // Calculate X position to center the canvas area horizontally, respecting min margin
+    let minSideMargin = 15;
     let targetCANVAS_AREA_X = max(minSideMargin, (width / 2 - targetCANVAS_AREA_W / 2));
 
-    let padY = 20; // Padding below the header
+    let padY = 20;
     let targetCANVAS_AREA_Y = HEADER_HEIGHT + padY;
 
-     // Check if the calculated height fits within the available vertical space
-     const availableH = height - HEADER_HEIGHT - padY - 15; // Space below header minus padding/margin
+     const availableH = height - HEADER_HEIGHT - padY - 15;
      const requiredH_forW = targetCANVAS_AREA_W * (5/4);
 
      if (requiredH_forW > availableH && availableH > 100) {
-        // If height is too large, scale down based on available height
         targetCANVAS_AREA_H = availableH;
-        targetCANVAS_AREA_W = targetCANVAS_AREA_H * (4/5); // Recalculate width based on available height
-
-        // Re-validate width constraints after scaling by height
+        targetCANVAS_AREA_W = targetCANVAS_AREA_H * (4/5);
         targetCANVAS_AREA_W = max(minCanvasW, min(targetCANVAS_AREA_W, windowWidth * 0.95));
-         // Re-center horizontally based on the new width
         targetCANVAS_AREA_X = max(minSideMargin, (width / 2 - targetCANVAS_AREA_W / 2));
      }
 
-     // Assign final calculated dimensions and position
      CANVAS_AREA_W = targetCANVAS_AREA_W;
      CANVAS_AREA_H = targetCANVAS_AREA_H;
      CANVAS_AREA_X = targetCANVAS_AREA_X;
      CANVAS_AREA_Y = targetCANVAS_AREA_Y;
 
-    // Resize canvasPG if dimensions have changed and are valid
+
     if (canvasPG && (canvasPG.width !== CANVAS_AREA_W || canvasPG.height !== CANVAS_AREA_H)) {
          if (CANVAS_AREA_W > 0 && CANVAS_AREA_H > 0) {
               canvasPG.resizeCanvas(CANVAS_AREA_W, CANVAS_AREA_H);
-               canvasPG.background(255); // Clear with white after resize
+               canvasPG.background(255);
          } else {
-               // If dimensions are invalid, remove canvasPG to prevent errors
                if (canvasPG) { try { canvasPG.remove(); } catch(e) {} } canvasPG = null;
          }
      } else if (!canvasPG && CANVAS_AREA_W > 0 && CANVAS_AREA_H > 0) {
-          // If canvasPG didn't exist but dimensions are valid, create it
           canvasPG = createGraphics(CANVAS_AREA_W, CANVAS_AREA_H);
           canvasPG.background(255);
      }
 
 
      // --- Ensure textMeasurePG is initialized or re-initialized defensively ---
-     // This buffer is crucial for getTextBounds
      if (!textMeasurePG || typeof textMeasurePG.textWidth !== 'function') {
           if (textMeasurePG) { try { textMeasurePG.remove(); } catch(e) {} }
           try {
-               textMeasurePG = createGraphics(10, 10); // Small size is fine for measurement
+               textMeasurePG = createGraphics(10, 10);
                // Re-apply essential text properties
-                if (typeof textMeasurePG.textFont === 'function') textMeasurePG.textFont(baseFont);
+                // Check for truthiness before calling textFont
+                if (fontSenRegular) {
+                    textMeasurePG.textFont(fontSenRegular);
+                } else {
+                    textMeasurePG.textFont(baseFont); // Fallback
+                }
                if (typeof textMeasurePG.textAlign === 'function') textMeasurePG.textAlign(CENTER, CENTER);
-               if (typeof textMeasurePG.textSize === 'function') textMeasurePG.textSize(16);
           } catch(e) {
-               textMeasurePG = null; // Set to null if creation fails
-               console.error("Failed to create textMeasurePG graphics buffer.");
+               textMeasurePG = null;
           }
      }
 
 
-     // Position Input Element
      let headerCenterY = HEADER_HEIGHT / 2;
      if (inputElement) {
-          // Get actual rendered height of the input element
-          let inputHeight = inputElement.elt.offsetHeight || 30; // Use 30 as a fallback
+          let inputHeight = inputElement.elt.offsetHeight || 30;
           inputElement.position(CANVAS_AREA_X, headerCenterY - inputHeight / 2);
-         inputElement.size(CANVAS_AREA_W); // Make input width match canvas width
+         inputElement.size(CANVAS_AREA_W);
      }
 
-     // Position Buttons
-     // Helper to get button's rendered width (including padding/border)
      const btnOuterWidth = (btn) => { if (!btn || !btn.elt) return 0; return btn.elt.offsetWidth || 80; };
 
-    const buttonSpacing = 8; // Space between buttons
-    const rightMargin = 15; // Margin from the right edge
+    const buttonSpacing = 8;
+    const rightMargin = 15;
 
-    // Get widths of all buttons
     let savePNGBtnW = btnOuterWidth(savePNGButton);
     let saveHighResPNGBtnW = btnOuterWidth(saveHighResPNGButton);
     let savePDFBtnW = btnOuterWidth(savePDFButton);
     let clearBtnW = btnOuterWidth(clearButton);
     let refreshBtnW = btnOuterWidth(refreshButton);
 
-    // Create a list of buttons to position, in order from left to right
     let allButtons = [refreshButton, clearButton, savePNGButton, saveHighResPNGButton, savePDFButton].filter(btn => btn !== null);
     let totalButtonWidths = allButtons.reduce((sum, btn) => sum + btnOuterWidth(btn), 0);
     let numButtons = allButtons.length;
-     let totalSpacing = (numButtons > 1 ? (numButtons - 1) * buttonSpacing : 0); // Total space between buttons
+     let totalSpacing = (numButtons > 1 ? (numButtons - 1) * buttonSpacing : 0);
 
-     // Calculate the starting X position for the block of buttons (right-aligned)
      let buttonBlockStartX = width - rightMargin - (totalButtonWidths + totalSpacing);
 
-     // Ensure buttons don't overlap with the input element
      let inputRightEdge = inputElement ? inputElement.position().x + inputElement.size().width : 0;
-     let minButtonStartX = inputRightEdge + 30; // Minimum space between input and buttons
+     let minButtonStartX = inputRightEdge + 30;
 
-     buttonBlockStartX = max(buttonBlockStartX, minButtonStartX); // Use the larger of the calculated start or minimum start
+     buttonBlockStartX = max(buttonBlockStartX, minButtonStartX);
 
-     // Calculate the vertical position for the buttons (centered in header)
-     let buttonHeight = (savePNGButton ? savePNGButton.elt.offsetHeight || 30 : HEADER_HEIGHT / 4); // Get actual height or fallback
+     let buttonHeight = (savePNGButton ? savePNGButton.elt.offsetHeight || 30 : HEADER_HEIGHT / 4);
      let buttonPadY_buttons = headerCenterY - buttonHeight / 2;
 
-    let currentButtonX = buttonBlockStartX; // Start positioning from the calculated block start
+    let currentButtonX = buttonBlockStartX;
 
-    // Position each button sequentially
     if (refreshButton) { refreshButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += btnOuterWidth(refreshButton) + buttonSpacing; }
     if (clearButton) { clearButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += btnOuterWidth(clearButton) + buttonSpacing; }
     if (savePNGButton) { savePNGButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += btnOuterWidth(savePNGButton) + buttonSpacing; }
     if (saveHighResPNGButton) { saveHighResPNGButton.position(currentButtonX, buttonPadY_buttons); currentButtonX += btnOuterWidth(saveHighResPNGButton) + buttonSpacing; }
-    if (savePDFButton) { savePDFButton.position(currentButtonX, buttonPadY_buttons); /* Last button, no need to update currentButtonX */ }
+    if (savePDFButton) { savePDFButton.position(currentButtonX, buttonPadY_buttons); /* Last button */ }
 }
 
-// Handles window resizing
 function windowResized() {
-     // Only resize if window dimensions are positive and have actually changed
      if (windowWidth > 0 && windowHeight > 0 && (windowWidth !== width || windowHeight !== height)) {
         resizeCanvas(windowWidth, windowHeight);
-         positionDOMElementsAndCanvasPG(); // Reposition elements and canvasPG
+         positionDOMElementsAndCanvasPG();
      } else {
-         return; // No effective resize
+         return;
      }
 }
 
-// Handles mouse press events
 function mousePressed() {
-   // Ignore clicks in the header area
    if (mouseY < HEADER_HEIGHT) {
-       return true; // Allow default browser behavior for header clicks
+       return true;
     }
 
-   // If an item is already grabbed, check if the click is on the grabbed item itself.
-   // If so, do nothing (mouseMoved will handle dragging). If not, ignore the click.
-   if (grabbedItem) {
-        if (grabbedItem.isMouseOver(mouseX, mouseY)) {
-             // If it's a text item, focus the input field
-             if (grabbedItem.type === 'text') inputElement.elt.focus();
-             return false; // Prevent default behavior (like text selection)
-        } else {
-             return false; // Ignore clicks outside the grabbed item while dragging
-        }
+   if (grabbedItem && grabbedItem.isMouseOver(mouseX, mouseY)) {
+        if (grabbedItem.type === 'text') inputElement.elt.focus();
+        return false;
+   } else if (grabbedItem) {
+        return false;
    }
 
-   // Check for clicks on placed items within the canvas area (check top-most item first)
    if (isMouseOverCanvasArea(mouseX, mouseY)) {
        for (let i = placedItems.length - 1; i >= 0; i--) {
             if (placedItems[i].isMouseOver(mouseX, mouseY)) {
-                // Found a placed item, grab it
                 grabbedItem = placedItems[i];
                 grabbedItem.isGrabbed = true;
-                grabbedItem.isPlacing = false; // Stop landing animation
-                grabbedItem.solidify(); // Stop any residual movement
-
-                // Move the grabbed item from placedItems to shapes (so it's drawn on top)
+                grabbedItem.isPlacing = false;
+                grabbedItem.solidify();
                 let temp = placedItems.splice(i, 1)[0];
                 shapes.push(temp);
 
-                // If it's a text item, populate and focus the input field
                 if (grabbedItem.type === 'text') {
                     inputElement.value(grabbedItem.content || '');
-                    inputElement.attribute('placeholder', ''); // Clear placeholder when editing
-                    inputElement.elt.focus();
+                    inputElement.attribute('placeholder', '');
                  } else {
-                    // If not text, clear input and blur focus
                     inputElement.value('');
                     inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
                     inputElement.elt.blur();
                  }
-                return false; // Prevent default behavior
+                return false;
            }
        }
    }
 
-  // If no placed item was clicked, check for clicks on floating shapes (check top-most first)
   for (let i = shapes.length - 1; i >= 0; i--) {
-      if (!shapes[i].isGrabbed) { // Only consider shapes that aren't already grabbed (shouldn't happen, but safe)
+      if (!shapes[i].isGrabbed) {
           if (shapes[i].isMouseOver(mouseX, mouseY)) {
-              // Found a floating shape, grab it
               grabbedItem = shapes[i];
               grabbedItem.isGrabbed = true;
-              grabbedItem.isPlacing = false; // Stop any animation
-              grabbedItem.solidify(); // Stop its own movement
-
-              // Move the grabbed item to the end of the shapes array so it's drawn last (on top)
+              grabbedItem.isPlacing = false;
+              grabbedItem.solidify();
               let temp = shapes.splice(i, 1)[0];
               shapes.push(temp);
 
-               // If it's a text item, populate and focus the input field
               if (grabbedItem.type === 'text') {
                  inputElement.value(grabbedItem.content || '');
                  inputElement.attribute('placeholder', '');
                  inputElement.elt.focus();
               } else {
-                 // If not text, clear input and blur focus
                  inputElement.value('');
                  inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
                   inputElement.elt.blur();
               }
-              return false; // Prevent default behavior
+              return false;
           }
       }
   }
-   return true; // Allow default behavior if nothing was clicked
+   return true;
 }
 
-// Handles mouse release events
 function mouseReleased() {
   if (grabbedItem) {
     let wasTextItem = grabbedItem.type === 'text';
-    grabbedItem.isGrabbed = false; // Release the grab
+    grabbedItem.isGrabbed = false;
 
-    // Check if the item was released over the central canvas area
     if (isMouseOverCanvasArea(grabbedItem.x, grabbedItem.y)) {
-      // Item was dropped onto the canvas area, solidify and place it
-
-      // If it's a text item, update its content from the input field
       if (wasTextItem) {
            let content = inputElement.value().trim();
-           // If text is empty or placeholder, remove the item instead of placing
            if(content === "" || content === TEXT_OPTIONS[0].trim()) {
-               // Remove from shapes array
                shapes = shapes.filter(s => s !== grabbedItem);
-               grabbedItem = null; // Clear grabbed item reference
-                // Reset input field
+               grabbedItem = null;
                 inputElement.value('');
                 inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
                 inputElement.elt.blur();
-               return; // Exit the function
+               return;
            } else {
-              grabbedItem.content = content; // Update content
+              grabbedItem.content = content;
            }
       }
 
-      grabbedItem.solidify(); // Ensure it stops moving
+      grabbedItem.solidify();
 
-      // Snap rotation if SNAP_INCREMENT_RADIANS is set
       if (SNAP_INCREMENT_RADIANS !== undefined && SNAP_INCREMENT_RADIANS > 0) {
         grabbedItem.rotation = snapAngle(grabbedItem.rotation, SNAP_INCREMENT_RADIANS);
       }
 
-      // Remove from shapes array (it's now placed)
       shapes = shapes.filter(s => s !== grabbedItem);
-      // Add to placedItems array
       placedItems.push(grabbedItem);
 
-      // Start the landing animation
       grabbedItem.isPlacing = true;
       grabbedItem.landFrame = frameCount;
 
 
     } else {
-         // Item was dropped outside the canvas area, let it float away
-
-         // If it's a text item, update its content from the input field
          if (wasTextItem) {
              let content = inputElement.value().trim();
-             // If text is empty or placeholder, remove the item
              if (content === "" || content === TEXT_OPTIONS[0].trim()) {
                   shapes = shapes.filter(s => s !== grabbedItem);
                   grabbedItem = null;
@@ -1200,19 +1061,17 @@ function mouseReleased() {
                    inputElement.elt.blur();
                  return;
              } else {
-                  grabbedItem.content = content; // Update content
+                  grabbedItem.content = content;
              }
          }
 
-          // Give it random speeds to float away
           grabbedItem.speedX = random(-1.5, 1.5);
           grabbedItem.speedY = random(-1.5, 1.5);
           grabbedItem.rotationSpeed = random(-0.003, 0.003);
-          grabbedItem.isPlacing = false; // Ensure no landing animation outside canvas
+          grabbedItem.isPlacing = false;
     }
 
-    // Clear the grabbed item reference and reset input field after handling
-    if (grabbedItem !== null) { // Check if it wasn't removed (empty text dropped on canvas)
+    if (grabbedItem !== null) {
          grabbedItem = null;
          inputElement.value('');
          inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
@@ -1221,95 +1080,58 @@ function mouseReleased() {
   }
 }
 
-// Handles double-click events
 function doubleClicked() {
-    // Only process double clicks within the canvas area
     if (!isMouseOverCanvasArea(mouseX, mouseY)) return true;
 
-    // Check placed items from top-most down
     for (let i = placedItems.length - 1; i >= 0; i--) {
         let item = placedItems[i];
-        // If the double click is over a placed item
         if (item.isMouseOver(mouseX, mouseY)) {
-            // Move the item to the bottom of the placedItems list (send to back)
             let itemToSendToBack = placedItems.splice(i, 1)[0];
             placedItems.unshift(itemToSendToBack);
-            itemToSendToBack.solidify(); // Ensure it stays placed
-            return false; // Prevent default behavior
+            itemToSendToBack.solidify();
+            return false;
         }
     }
-     return true; // Allow default behavior if no item was double-clicked
+     return true;
 }
 
-// Handles mouse wheel events for rotation
 function mouseWheel(event) {
    let isOverCanvasArea = isMouseOverCanvasArea(mouseX, mouseY);
 
-    // If an item is grabbed OR the mouse is over the canvas area (to rotate placed items)
     if (grabbedItem || isOverCanvasArea) {
-         let itemToRotate = grabbedItem;
-         // If no item is grabbed but mouse is over canvas, find the top-most placed item
-         if (!itemToRotate && isOverCanvasArea) {
-             for (let i = placedItems.length - 1; i >= 0; i--) {
-                  if (placedItems[i].isMouseOver(mouseX, mouseY)) {
-                       itemToRotate = placedItems[i];
-                       break; // Found the top-most, stop searching
-                  }
-             }
+         if (grabbedItem) {
+            grabbedItem.rotation += event.delta * 0.002;
          }
-
-         // If an item was found (grabbed or placed under mouse)
-         if (itemToRotate) {
-            // Rotate based on mouse wheel delta
-            itemToRotate.rotation += event.delta * 0.002;
-            // If rotating a placed item, snap the angle immediately
-            if (!grabbedItem && SNAP_INCREMENT_RADIANS !== undefined && SNAP_INCREMENT_RADIANS > 0) {
-                 itemToRotate.rotation = snapAngle(itemToRotate.rotation, SNAP_INCREMENT_RADIANS);
-            }
-             return false; // Prevent default scrolling
-         }
+        return false;
     }
-    return true; // Allow default scrolling if not interacting with items
+    return true;
 }
 
-// Handles key press events
 function keyPressed() {
-    // If the input element is focused, let the browser handle key presses for typing
     if (document.activeElement === inputElement.elt) {
-        // Allow Enter key to add text from input field, but handle it in the event listener
-        if (keyCode === ENTER) {
-             // The keypress listener on inputElement handles this
-             return true; // Allow default propagation here, listener will preventDefault if needed
-        }
-        return true; // Allow other keys for typing
+        return true;
     }
 
-     // If focus is not on the body or canvas, let the browser handle it (e.g., other form elements)
      if (document.activeElement !== document.body && document.activeElement !== canvas.elt) {
         return true;
     }
 
-    // If an item is grabbed and Delete or Backspace is pressed
     if (grabbedItem && (keyCode === DELETE || keyCode === BACKSPACE)) {
-        // Remove the item from both lists
         shapes = shapes.filter(s => s !== grabbedItem);
         placedItems = placedItems.filter(s => s !== grabbedItem);
-        grabbedItem = null; // Clear grabbed item reference
-        // Reset input field
+        grabbedItem = null;
         inputElement.value('');
         inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-         inputElement.elt.blur(); // Remove focus from input if it had it
-        return false; // Prevent default browser behavior (like navigating back)
+        return false;
     }
 
-     // If an item is grabbed and '+' or '-' is pressed (for scaling)
      if (grabbedItem) {
-          const scaleIncrement = 1.08; // Scale up by 8%
-          const scaleDecrement = 1 / scaleIncrement; // Scale down by 1/1.08
-          const minScale = 0.05; // Minimum scale factor
-          const maxScale = 10.0; // Maximum scale factor
+          const scaleIncrement = 1.08;
+          const scaleDecrement = 1 / scaleIncrement;
+          const minScale = 0.05;
+          const maxScale = 10.0;
 
-         if (key === '+' || key === '=') { // '+' and '=' often share a key
+         if (key === '+' || key === '=') {
              grabbedItem.scaleFactor *= scaleIncrement;
              grabbedItem.scaleFactor = min(grabbedItem.scaleFactor, maxScale);
          }
@@ -1317,627 +1139,535 @@ function keyPressed() {
              grabbedItem.scaleFactor *= scaleDecrement;
              grabbedItem.scaleFactor = max(grabbedItem.scaleFactor, minScale);
          }
-        return false; // Prevent default browser behavior
+        return false;
     }
-    return true; // Allow default browser behavior if no item is grabbed
+    return true;
 }
 
-// Creates a new text shape from the input field content and adds it to floating shapes
+// Corrected addNewTextShapeFromInput function
 function addNewTextShapeFromInput() {
     let currentText = inputElement.value();
-    // Validate input text
     if (!currentText || currentText.trim() === "" || currentText.trim() === TEXT_OPTIONS[0].trim()) {
-         // Flash border red to indicate invalid input
          inputElement.style("border-color", "red");
          setTimeout(() => inputElement.style("border-color", "#ccc"), 500);
-         inputElement.value(''); // Clear input
-         inputElement.attribute('placeholder', TEXT_OPTIONS[0]); // Restore placeholder
-         inputElement.elt.focus(); // Keep focus on input
-         return; // Stop here if input is invalid
+         inputElement.value('');
+         inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+         inputElement.elt.focus();
+         return;
     }
 
     let newTextShape = new FloatingShape();
 
-    // Override properties set by reset() for a text shape created from input
-    // We want it to be a text shape with the input content
+    newTextShape.reset(); // Start with initial floating properties
+
     newTextShape.type = 'text';
     newTextShape.content = currentText.trim();
-    newTextShape.shapeType = 'none'; // No polygon shape for text
+    newTextShape.shapeType = 'none';
 
-    // Assign size and scale based on a category (e.g., medium)
     let category = sizeCategories.find(cat => cat.name === 'medium') || { sizeRange: [100, 200], scaleRange: [1.0, 1.5], textScaleAdjust: 0.2 };
-    newTextShape.size = random(category.sizeRange[0] * 0.8, category.sizeRange[1] * 1.2); // Slightly wider size range
-    newTextShape.scaleFactor = 1.0; // Start with scale 1
+    newTextShape.size = random(category.sizeRange[0] * 0.8, category.sizeRange[1] * 1.2);
+    newTextShape.scaleFactor = 1.0;
     newTextShape.textScaleAdjust = category.textScaleAdjust;
 
-     // Pick a color, trying to avoid very light colors on the black background
      let pickedColor;
      let attempts = 0;
      do {
          pickedColor = color(random(PALETTE));
          let b = brightness(pickedColor);
-         // Retry if brightness is too high, unless many attempts have been made
+         if (b < 50 && attempts < 5) continue;
          if (b > 200 && attempts < 5) continue;
-         break; // Accept color if not too bright or after several attempts
+         break;
      } while (attempts < 10);
 
-      // Final fallback if the loop somehow picked a bright color
       if (brightness(pickedColor) > 200) {
-           pickedColor = color(random(['#0000FE', '#E70012', '#41AD4A', '#000000', '#222222'])); // Pick a guaranteed dark color
+           pickedColor = color(random(['#0000FE', '#E70012', '#41AD4A', '#000000', '#222222']));
       }
      newTextShape.color = pickedColor;
 
 
-    // --- MODIFICATION START: Assign a random loaded font from the list ---
-    if (loadedFontsList.length > 0) {
-        newTextShape.font = random(loadedFontsList); // Pick a random p5.Font object
-         // console.log(`addNewTextShapeFromInput: Assigned font:`, newTextShape.font ? newTextShape.font.font.names.postscriptName : 'Fallback'); // Debug font name
+    // --- Assign a random loaded font ---
+    const potentialFonts = [
+        fontBangersRegular,
+        fontBoogalooRegular,
+        fontBreeSerifRegular,
+        fontCaveatBrushRegular,
+        fontCherryBombOneRegular,
+        fontCinzelDecorativeBlack,
+        fontCinzelDecorativeBold,
+        fontCinzelDecorativeRegular,
+        fontDynaPuffBold,
+        fontDynaPuffMedium,
+        fontDynaPuffRegular,
+        fontInterBold,
+        fontInterRegular,
+        fontPixelifySansRegular,
+        fontSenBold,
+        fontSenMedium,
+        fontSenRegular,
+        fontShareTechMonoRegular,
+        fontVT323Regular
+    ];
+
+    // Filter for fonts that loaded successfully (are truthy)
+    // CORRECTED FILTER: Check if the variable holds a valid font object (is truthy)
+    const usableFonts = potentialFonts.filter(f => f);
+
+    if (usableFonts.length > 0) {
+        newTextShape.font = random(usableFonts);
+         // --- DEBUG: Log selected font ---
+         console.log(`addNewTextShapeFromInput: ${usableFonts.length} usable fonts found. Assigned font:`, newTextShape.font);
+         // --- END DEBUG ---
     } else {
-        newTextShape.font = baseFont; // Fallback to the string 'monospace'
-         // console.log(`addNewTextShapeFromInput: Using fallback font:`, newTextShape.font); // Debug fallback
+        newTextShape.font = baseFont;
+        // --- DEBUG: Log fallback font ---
+        console.log(`addNewTextShapeFromInput: 0 usable fonts found. Using fallback font:`, newTextShape.font);
+        // --- END DEBUG ---
     }
-    // --- MODIFICATION END ---
+    // --- End font assignment ---
 
 
      // --- Apply Custom SPAWN LOCATION for new text (near artboard sides), OVERRIDING reset() position/speed ---
-     // This makes text added from input appear near the artboard for easy placement
-     let spawnMargin = 40; // Margin around the canvas area
-     let spawnedCustom = false; // Flag to track if custom positioning was applied
+     let spawnMargin = 40;
+     let spawnedCustom = false;
 
-     // Calculate available space left and right of the canvas area
      let leftSpace = CANVAS_AREA_X;
      let rightSpace = width - (CANVAS_AREA_X + CANVAS_AREA_W);
 
      let spawnSide;
-     // Prefer spawning on the side with more space
      if (leftSpace > rightSpace * 1.5) {
          spawnSide = 'left';
      } else if (rightSpace > leftSpace * 1.5) {
          spawnSide = 'right';
      } else {
-         spawnSide = random() > 0.5 ? 'right' : 'left'; // Random if space is similar
+         spawnSide = random() > 0.5 ? 'right' : 'left';
      }
 
-     // Position the shape on the chosen side if there's enough space
      if (spawnSide === 'left' && leftSpace > spawnMargin * 2) {
          newTextShape.x = random(spawnMargin, CANVAS_AREA_X - spawnMargin);
-         newTextShape.speedX = random(0.5, 1.5); // Move towards the canvas area
+         newTextShape.speedX = random(0.5, 1.5);
          spawnedCustom = true;
      } else if (rightSpace > spawnMargin * 2) {
          newTextShape.x = random(CANVAS_AREA_X + CANVAS_AREA_W + spawnMargin, width - spawnMargin);
-         newTextShape.speedX = random(-1.5, -0.5); // Move towards the canvas area
+         newTextShape.speedX = random(-1.5, -0.5);
          spawnedCustom = true;
      }
 
-     // If a custom horizontal position was set, set a vertical position and speeds
      if (spawnedCustom) {
-          // Position vertically within or near the canvas area height
           newTextShape.y = random(CANVAS_AREA_Y - spawnMargin, CANVAS_AREA_Y + CANVAS_AREA_H + spawnMargin);
-          // Ensure it's not in the header area
           newTextShape.y = max(newTextShape.y, HEADER_HEIGHT + spawnMargin);
-          // Ensure it's within window bounds vertically
           newTextShape.y = max(spawnMargin, min(newTextShape.y, height - spawnMargin));
 
-          newTextShape.speedY = random(-0.5, 0.5); // Slow vertical movement
-          newTextShape.rotation = random(TWO_PI); // Random initial rotation
-          newTextShape.rotationSpeed = random(-0.001, 0.001); // Slow rotation speed
+          newTextShape.speedY = random(-0.5, 0.5);
+          newTextShape.rotation = random(TWO_PI);
+          newTextShape.rotationSpeed = random(-0.001, 0.001);
 
      }
     // --- End Custom SPAWN LOCATION ---
 
     newTextShape.isGrabbed = false;
-    newTextShape.isPlacing = false; // Not placing immediately
+    newTextShape.isPlacing = false;
 
-    shapes.push(newTextShape); // Add the new shape to the floating shapes list
+    shapes.push(newTextShape);
 
-    // Clear input field and restore placeholder
     inputElement.value('');
     inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-    inputElement.elt.focus(); // Keep focus on input for next text
+    inputElement.elt.focus();
 }
 
-// Helper function to check if a point is within the central canvas area
 function isMouseOverCanvasArea(pX, pY) {
-     // Use mouseX/mouseY if pX/pY are not provided
      const checkX = pX === undefined ? mouseX : pX;
      const checkY = pY === undefined ? mouseY : pY;
 
-    // Check if the point is within the bounds of the canvas area rectangle
     return checkX >= CANVAS_AREA_X && checkX <= CANVAS_AREA_X + CANVAS_AREA_W &&
            checkY >= CANVAS_AREA_Y && checkY <= CANVAS_AREA_Y + CANVAS_AREA_H;
 }
 
-// Snaps an angle (in radians) to the nearest increment
 function snapAngle(angleRadians, incrementRadians) {
     if (incrementRadians <= 0 || isNaN(incrementRadians)) return angleRadians;
-    // Normalize angle to be within [0, TWO_PI)
     angleRadians = (angleRadians % TWO_PI + TWO_PI) % TWO_PI;
-    // Calculate the number of increments
     let numIncrements = round(angleRadians / incrementRadians);
-    // Calculate the snapped angle
     let snapped = numIncrements * incrementRadians;
-    // Normalize the snapped angle again
     snapped = (snapped % TWO_PI + TWO_PI) % TWO_PI;
     return snapped;
 }
 
-// Generates a timestamp string for filenames
 function generateTimestampString() {
     let d = new Date();
     return d.getFullYear() + nf(d.getMonth() + 1, 2) + nf(d.getDate(), 2) + '_' + nf(d.getHours(), 2) + nf(d.getMinutes(), 2) + nf(d.getSeconds(), 2);
 }
 
-// Saves the central canvas area as a standard resolution PNG
+
 function saveCanvasAreaAsPNG() {
-    // Check if canvasPG is available and valid
     if (!canvasPG || canvasPG.width <= 0 || canvasPG.height <= 0) {
         alert("Error: Cannot save standard PNG. Canvas area buffer is not available or invalid.");
-        console.error("saveCanvasAreaAsPNG: canvasPG is invalid or has zero dimensions.");
         return;
     }
 
-    // Create a temporary graphics buffer to draw the canvas area onto
-    // This allows adding a border without affecting the live canvasPG
     let saveBuffer = createGraphics(canvasPG.width, canvasPG.height);
-    saveBuffer.image(canvasPG, 0, 0); // Copy the canvas area content
+    saveBuffer.image(canvasPG, 0, 0);
 
-    // Draw a border onto the save buffer
     saveBuffer.push();
     saveBuffer.stroke(0);
     saveBuffer.strokeWeight(1);
     saveBuffer.noFill();
-    // Draw rectangle slightly inset to keep border within bounds
     saveBuffer.rect(0.5, 0.5, saveBuffer.width - 1, saveBuffer.height - 1);
     saveBuffer.pop();
 
-    // Save the temporary buffer
     saveCanvas(saveBuffer, 'myArtboard_stdres_' + generateTimestampString() + '.png');
-
-    // Remove the temporary buffer
     if (saveBuffer) { saveBuffer.remove(); }
 }
 
-// Saves the central canvas area as a high-resolution PNG
+
 function saveCanvasAreaAsHighResPNG() {
 
-     // Check if canvasPG is available and valid (needed for base dimensions)
      if (!canvasPG || canvasPG.width <= 0 || canvasPG.height <= 0) {
         alert("Error: Cannot save high-resolution PNG. Canvas area buffer is not available or invalid.");
-        console.error("saveCanvasAreaAsHighResPNG: canvasPG is invalid or has zero dimensions.");
         return;
      }
 
-    // Define the base dimensions (from the fixed ratio source)
     const sourceWidthBase = CANVAS_AREA_W_BASE;
-    const sourceHeightBase = CANVAS_AREA_W_BASE * (5/4); // Assuming 4:5 ratio is based on this width
+    const sourceHeightBase = CANVAS_AREA_W_BASE * (5/4);
 
-    // Define target print resolution and paper size (B2)
-    const TARGET_DPI = 300; // Dots per inch
-    const B2_WIDTH_INCHES = 500 / 25.4; // B2 width in mm converted to inches
-    const B2_HEIGHT_INCHES = 707 / 25.4; // B2 height in mm converted to inches
+    const TARGET_DPI = 300;
+    const B2_WIDTH_INCHES = 500 / 25.4;
+    const B2_HEIGHT_INCHES = 707 / 25.4;
 
-    // Calculate target pixel dimensions based on DPI
     const targetWidthPixels = round(B2_WIDTH_INCHES * TARGET_DPI);
     const targetHeightPixels = round(B2_HEIGHT_INCHES * TARGET_DPI);
 
-     // Calculate the scaling factor needed to map the source base width to the target pixel width
      const scaleFactor = targetWidthPixels / sourceWidthBase;
-     // Calculate the scaled height of the original 4:5 content within the target dimensions
      const scaledSourceHeight = sourceHeightBase * scaleFactor;
-     // Calculate vertical offset to center the 4:5 content within the B2 height
      const verticalOffset = (targetHeightPixels - scaledSourceHeight) / 2;
 
-    let highResPG = null; // Variable for the high-resolution graphics buffer
+    let highResPG = null;
      try {
-         // Validate target dimensions
          if (targetWidthPixels <= 0 || targetHeightPixels <= 0 || isNaN(targetWidthPixels) || isNaN(targetHeightPixels)) {
-             alert("Error calculating high-res save size. Target dimensions are invalid.");
-              console.error("saveHighResPNG: Calculated target dimensions are invalid:", targetWidthPixels, targetHeightPixels);
+             alert("Error calculating high-res save size.");
              return;
          }
 
-        // Create the high-resolution graphics buffer
         highResPG = createGraphics(targetWidthPixels, targetHeightPixels);
-        highResPG.background(255); // White background
+        highResPG.background(255);
 
-        // Draw each placed item onto the high-resolution buffer
         for (let i = 0; i < placedItems.length; i++) {
              let item = placedItems[i];
 
-             // Skip empty text items
              if (item.type === 'text' && (!item.content || item.content.trim() === "" || item.content.trim() === TEXT_OPTIONS[0].trim())) {
                  continue;
              }
-             // Skip items with invalid scale or size
              if (item.scaleFactor <= 0 || item.size <= 0) continue;
 
-            highResPG.push(); // Save graphics state
+            highResPG.push();
 
-             // Calculate item's position in the high-res buffer coordinates
-             // Item's position (item.x, item.y) is relative to the main window.
-             // Subtract CANVAS_AREA_X/Y to get position relative to the canvas area's top-left.
-             // Multiply by scaleFactor to get position in high-res pixels.
-             // Add verticalOffset to center the content vertically.
              let hrItemX = (item.x - CANVAS_AREA_X) * scaleFactor;
              let hrItemY = (item.y - CANVAS_AREA_Y) * scaleFactor + verticalOffset;
 
-             // Validate calculated position
              if (isNaN(hrItemX) || isNaN(hrItemY)) {
-                 console.warn("saveHighResPNG: Calculated item position is NaN. Skipping item.", item);
-                 highResPG.pop(); continue; // Restore graphics state and skip this item
+                 highResPG.pop(); continue;
              }
+            highResPG.translate(hrItemX, hrItemY);
+            highResPG.rotate(item.rotation);
 
-            highResPG.translate(hrItemX, hrItemY); // Move origin to item's position
-            highResPG.rotate(item.rotation); // Apply item's rotation
-
-             // Calculate the combined scale for the high-res buffer
              let combinedScale = item.scaleFactor * scaleFactor;
-              combinedScale = max(combinedScale, 1e-6); // Ensure scale is not zero
+              combinedScale = max(combinedScale, 1e-6);
 
-            highResPG.scale(combinedScale); // Apply the combined scale
+            highResPG.scale(combinedScale);
 
-            highResPG.fill(item.color); // Apply item's color
-            highResPG.noStroke(); // No stroke for the fill
+            highResPG.fill(item.color);
+            highResPG.noStroke();
 
-             // Get the item's font and text scale adjustment
+             // Use the font object itself
              let itemFont = item.font;
              let itemTextScale = isNaN(item.textScaleAdjust) ? 0.2 : item.textScaleAdjust;
-             itemTextScale = max(itemTextScale, 1e-3); // Ensure text scale adjust is positive
+             itemTextScale = max(itemTextScale, 1e-3);
 
-             // Check if itemFont is a valid p5.Font object before using it on the highResPG context
-             if (itemFont && typeof itemFont.text === 'function') {
-                 if (typeof highResPG.textFont === 'function') highResPG.textFont(itemFont);
+             // Check if itemFont is a valid p5.Font object before using it
+             if (itemFont && typeof itemFont.text === 'function') { // Keep this check when applying to graphics context
+                 highResPG.textFont(itemFont);
              } else {
-                  // Fallback on highResPG if the specific item font is invalid or not a p5.Font object
-                  console.warn("saveHighResPNG: Item font invalid or not loaded. Using fallback font for item:", item);
-                  if (fontSenRegular && typeof fontSenRegular.text === 'function') highResPG.textFont(fontSenRegular);
-                  else highResPG.textFont(baseFont); // Fallback to string
+                  // Fallback on highResPG if the specific item font is bad
+                  if (fontSenRegular) highResPG.textFont(fontSenRegular);
+                  else highResPG.textFont(baseFont);
              }
 
-             // Draw the shape primitive onto the high-res buffer
+
              item.drawShapePrimitive(highResPG, 0, 0, item.size, item.shapeType, item.type === 'text', itemTextScale);
 
-            highResPG.pop(); // Restore graphics state
+            highResPG.pop();
         }
 
-        // Draw a border around the scaled canvas area within the high-res buffer
         highResPG.push();
-         highResPG.stroke(0); // Black border
-         // Scale the border weight based on the overall scale factor
+         highResPG.stroke(0);
          let borderWeight = 1 * scaleFactor;
-         borderWeight = max(borderWeight, 0.5); // Ensure minimum border weight
+         borderWeight = max(borderWeight, 0.5);
          highResPG.strokeWeight(borderWeight);
          highResPG.noFill();
-         // Calculate border rectangle position and size in high-res pixels
          let borderRectX = 0;
          let borderRectY = verticalOffset;
          let borderRectW = targetWidthPixels;
          let borderRectH = scaledSourceHeight;
 
-         // Draw rectangle slightly inset to keep border within bounds
          highResPG.rect(borderRectX + borderWeight / 2, borderRectY + borderWeight / 2,
                         borderRectW - borderWeight, borderRectH - borderWeight);
 
         highResPG.pop();
 
-        // Save the high-resolution buffer as a PNG file
         if (targetWidthPixels > 0 && targetHeightPixels > 0) {
              saveCanvas(highResPG, `myArtboard_HIRES_${targetWidthPixels}x${targetHeightPixels}_` + generateTimestampString() + '.png');
          } else {
-              alert("Error: High-resolution dimensions are invalid after final check.");
-               console.error("saveHighResPNG: Final target dimensions are invalid:", targetWidthPixels, targetHeightPixels);
+              alert("Error: High-resolution dimensions are invalid.");
          }
 
      } catch(e) {
-        alert("An error occurred while saving high-resolution PNG.");
-        console.error("Error saving high-resolution PNG:", e);
-     } finally {
-        // Always remove the high-resolution buffer after use
+        alert("Error saving high-resolution PNG. Check browser console for technical details if logs were enabled.");
         if (highResPG) {
-             // Ensure recording is stopped if it was started (for libraries like p5.js-svg)
              if (typeof highResPG.isRecording === 'boolean' && highResPG.isRecording && typeof highResPG.endRecord === 'function') {
-                 try{ highResPG.endRecord(); } catch(endErr) { console.error("Error ending highResPG record:", endErr); }
+                 try{ highResPG.endRecord(); } catch(endErr) {}
              }
-             // Remove the graphics buffer
-             if (typeof highResPG.remove === 'function') { try { highResPG.remove(); } catch(remErr) { console.error("Error removing highResPG:", remErr); } }
+             if (typeof highResPG.remove === 'function') { try { highResPG.remove(); } catch(remErr) {} }
+         }
+     } finally {
+        if (highResPG) {
+             highResPG.remove();
          }
      }
 }
 
 
-// Saves the central canvas area as a PDF
 function saveCanvasAreaAsPDF() {
 
-    // Check if the PDF library is loaded and initialized correctly
     if (typeof p5 === 'undefined' || !p5.prototype.createPDF || typeof p5.prototype.createPDF !== 'function') {
          alert("Error: PDF library not loaded or initialized correctly. Please ensure 'p5.pdf.js' is included AFTER 'p5.js'.");
-         console.error("saveCanvasAreaAsPDF: p5.pdf.js library not found or not initialized.");
          return;
      }
 
-    let pdf = null; // Variable for the PDF graphics context
+    let pdf = null;
 
      try {
-         // Create a PDF graphics context with the dimensions of the canvas area
-         // Pass 'this' (the main p5 sketch instance) to associate it correctly
+         // Use this context for PDF creation
          pdf = p5.prototype.createPDF(this);
 
-        // Basic check if PDF context was created successfully
         if (!pdf || typeof pdf.beginRecord !== 'function' || typeof pdf.endRecord !== 'function' || typeof pdf.save !== 'function') {
-             console.error("saveCanvasAreaAsPDF: Failed to create PDF instance.");
-             // Clean up if creation failed partway
              if (pdf && typeof pdf.remove === 'function') { try { pdf.remove(); } catch(e) {} }
              pdf = null;
              alert("Error creating PDF instance. PDF library might be corrupted or incompatible.");
             return;
         }
 
-        pdf.beginRecord(); // Start recording drawing commands for the PDF
+        pdf.beginRecord();
 
-        // Draw the white background for the PDF page (which represents the canvas area)
+        // Set PDF graphics properties
         pdf.fill(255);
         pdf.noStroke();
-        pdf.rect(0, 0, CANVAS_AREA_W, CANVAS_AREA_H); // Draw background covering the whole PDF page
+        pdf.rect(0, 0, CANVAS_AREA_W, CANVAS_AREA_H);
 
-        // Draw each placed item onto the PDF context
+
         for (let i = 0; i < placedItems.length; i++) {
              let item = placedItems[i];
 
-              // Skip empty text items
               if (item.type === 'text' && (!item.content || item.content.trim() === "" || item.content.trim() === TEXT_OPTIONS[0].trim())) {
                  continue;
              }
-             // Skip items with invalid scale or size
              if (item.scaleFactor <= 0 || item.size <= 0) continue;
 
-            pdf.push(); // Save graphics state
-
-            // Calculate item's position relative to the PDF context origin (0,0),
-            // which corresponds to the top-left of the canvas area.
+            pdf.push();
+            // Draw relative to the PDF context origin (0,0)
             pdf.translate(item.x - CANVAS_AREA_X, item.y - CANVAS_AREA_Y);
-            pdf.rotate(item.rotation); // Apply item's rotation
+            pdf.rotate(item.rotation);
 
-            pdf.scale(item.scaleFactor); // Apply item's scale
+            pdf.scale(item.scaleFactor);
 
-            pdf.fill(item.color); // Apply item's color
-            pdf.noStroke(); // No stroke for the fill
+            pdf.fill(item.color);
+            pdf.noStroke();
 
-             // Get the item's font and text scale adjustment
+             // Use the font object itself for PDF
              let itemFont = item.font;
              let itemTextScale = isNaN(item.textScaleAdjust) ? 0.2 : item.textScaleAdjust;
-             itemTextScale = max(itemTextScale, 1e-3); // Ensure text scale adjust is positive
+             itemTextScale = max(itemTextScale, 1e-3);
 
-             // Check if itemFont is a valid p5.Font object before using it on the PDF context
-             // PDF library might also handle font strings, but using p5.Font objects is preferred.
-             if (itemFont && typeof itemFont.text === 'function') {
-                  if (typeof pdf.textFont === 'function') pdf.textFont(itemFont);
+             // Check if itemFont is a valid p5.Font object before using it on PDF
+             if (itemFont && typeof itemFont.text === 'function') { // Check for the text method again for safety
+                 pdf.textFont(itemFont);
              } else {
-                  // Fallback on PDF if the specific item font is invalid or not a p5.Font object
-                  console.warn("savePDF: Item font invalid or not loaded. Using fallback font for item:", item);
-                   if (fontSenRegular && typeof fontSenRegular.text === 'function') pdf.textFont(fontSenRegular);
-                  else pdf.textFont(baseFont); // Fallback to string
+                  // Fallback on PDF if the specific item font is bad
+                   if (fontSenRegular) pdf.textFont(fontSenRegular);
+                  else pdf.textFont(baseFont); // baseFont is a string, pdf might handle it
              }
 
-            // Draw the shape primitive onto the PDF context
             item.drawShapePrimitive(pdf, 0, 0, item.size, item.shapeType, item.type === 'text', itemTextScale);
 
-            pdf.pop(); // Restore graphics state
+            pdf.pop();
         }
 
-         // Draw a border around the PDF page (representing the canvas area border)
          pdf.push();
-         pdf.stroke(0); // Black border
-         pdf.strokeWeight(1); // 1 unit weight (usually pixels, but scales in PDF)
+         pdf.stroke(0);
+         pdf.strokeWeight(1);
          pdf.noFill();
-         pdf.rect(0, 0, CANVAS_AREA_W, CANVAS_AREA_H); // Draw border covering the whole PDF page
+         pdf.rect(0, 0, CANVAS_AREA_W, CANVAS_AREA_H);
          pdf.pop();
 
 
-        pdf.endRecord(); // Stop recording drawing commands
+        pdf.endRecord();
 
-        // Save the PDF file
         pdf.save({
             filename: 'myArtboard_pdf_' + generateTimestampString(),
-            width: CANVAS_AREA_W, // Specify the dimensions for the PDF page size
+            width: CANVAS_AREA_W,
             height: CANVAS_AREA_H,
-            margin: {top:0, right:0, bottom:0, left:0} // No margins
+            margin: {top:0, right:0, bottom:0, left:0}
         });
 
 
      } catch(e) {
-         alert("An error occurred while generating PDF.");
-         console.error("Error generating PDF:", e);
-     } finally {
-         // Always remove the PDF context after use
-         if (pdf) {
-              // Ensure recording is stopped if it was started
-             if (typeof pdf.isRecording === 'boolean' && pdf.isRecording && typeof pdf.endRecord === 'function') {
-                 try{ pdf.endRecord(); } catch(endErr) { console.error("Error ending PDF record:", endErr); }
-             }
-             // Remove the PDF context
-             if (typeof pdf.remove === 'function') { try { pdf.remove(); } catch(remErr) { console.error("Error removing PDF:", remErr); } }
+         alert("Error generating PDF. Check browser console for technical details if logs were enabled.");
+         if (pdf && typeof pdf.isRecording === 'boolean' && pdf.isRecording && typeof pdf.endRecord === 'function') {
+             try{ pdf.endRecord(); } catch(endErr) {}
          }
+         if (pdf && typeof pdf.remove === 'function') { try { pdf.remove(); } catch(remErr) {} }
      }
 }
 
-// Resets only the floating shapes, keeping placed items
-function resetFloatingShapes() {
-    // Temporarily store the grabbed item if any
+function resetRandom() {
     let tempGrabbedItem = grabbedItem;
-    // Check if the grabbed item was a floating shape (not a placed one that was picked up)
     let wasFloating = tempGrabbedItem && shapes.includes(tempGrabbedItem);
 
-    // If the grabbed item was floating, remove it from the shapes list before clearing
     if (wasFloating) {
         shapes = shapes.filter(s => s !== tempGrabbedItem);
     }
 
-    shapes = []; // Clear the current floating shapes list
+    shapes = [];
 
-    // Create a new set of floating shapes
     while (shapes.length < 30) {
         let newShape = new FloatingShape();
         shapes.push(newShape);
     }
 
-    // Add the grabbed item back to the shapes list if it was floating originally
     if (wasFloating && tempGrabbedItem) {
         shapes.push(tempGrabbedItem);
     }
-    // Note: If a placed item was grabbed, it stays grabbed and is not affected by this reset
 }
 
-// Resets everything (floating shapes and placed items)
 function restartAll() {
-    placedItems = []; // Clear placed items
-    shapes = []; // Clear floating shapes
-    grabbedItem = null; // Clear grabbed item
+    placedItems = [];
+    shapes = [];
+    grabbedItem = null;
 
-    // Reset input field
     inputElement.value('');
     inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-    inputElement.elt.blur(); // Remove focus
+    inputElement.elt.blur();
 
-     // Clear the canvas area buffer
      if (canvasPG) {
          canvasPG.clear();
-         canvasPG.background(255); // Reset to white background
      }
 
-    // Create a new set of initial floating shapes
     while (shapes.length < 30) { shapes.push(new FloatingShape()); }
 }
 
-// --- Touch Event Handlers ---
-// Variables to track touch state
-let touchGrabbed = false; // Is a touch currently being used to drag an item?
+let touchGrabbed = false;
 
 function touchStarted(event) {
-    // Ignore if no touches are active
     if (touches.length === 0) return true;
 
-    // Get the position of the first touch
     let touchX = touches[0].x;
     let touchY = touches[0].y;
 
-    // Ignore touches in the header area
     if (touchY < HEADER_HEIGHT) {
-         if (event.cancelable) event.preventDefault(); // Prevent default touch behavior (like scrolling)
-         return true; // Allow default behavior for header
+         if (event.cancelable) event.preventDefault();
+         return true;
     }
 
-     // If an item is already grabbed by mouse or another touch, check if this touch is on it
-     // If so, mark touchGrabbed as true. If not, ignore this touch.
      if (grabbedItem) {
           if (grabbedItem.isMouseOver(touchX, touchY)) {
-              touchGrabbed = true; // This touch is controlling the grabbed item
+              touchGrabbed = true;
                if (event.cancelable) event.preventDefault();
-             return false; // Prevent default behavior
+             return false;
           } else {
-               // If already grabbed but this touch is elsewhere, ignore
                if (event.cancelable) event.preventDefault();
-               return false; // Prevent default behavior
+               return false;
           }
      }
 
-     // Check for touches on placed items within the canvas area (check top-most first)
      if (isMouseOverCanvasArea(touchX, touchY)) {
          for (let i = placedItems.length - 1; i >= 0; i--) {
              if (placedItems[i].isMouseOver(touchX, touchY)) {
-                  // Found a placed item, grab it
                   grabbedItem = placedItems[i];
                   grabbedItem.isGrabbed = true;
                   grabbedItem.isPlacing = false;
                   grabbedItem.solidify();
-
-                  // Move from placedItems to shapes array
                   let temp = placedItems.splice(i, 1)[0]; shapes.push(temp);
 
-                 // If text, update input field
                  if (grabbedItem.type === 'text') {
                      inputElement.value(grabbedItem.content || '');
                      inputElement.attribute('placeholder', '');
-                     // Note: Focusing input on touch can be tricky/disruptive on mobile
                   } else {
                       inputElement.value('');
                      inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
                   }
 
-                 touchGrabbed = true; // Mark that an item is grabbed by touch
+                 touchGrabbed = true;
                   if (event.cancelable) event.preventDefault();
-                 return false; // Prevent default behavior
+                 return false;
              }
          }
      }
 
-     // If no placed item was touched, check for touches on floating shapes
      for (let i = shapes.length - 1; i >= 0; i--) {
         if (!shapes[i].isGrabbed) {
           if (shapes[i].isMouseOver(touchX, touchY)) {
-            // Found a floating shape, grab it
             grabbedItem = shapes[i];
             grabbedItem.isGrabbed = true;
             grabbedItem.isPlacing = false;
             grabbedItem.solidify();
-
-            // Move to end of shapes array
             let temp = shapes.splice(i, 1)[0]; shapes.push(temp);
 
-             // If text, update input field
              if (grabbedItem.type === 'text') {
                  inputElement.value(grabbedItem.content || '');
                  inputElement.attribute('placeholder', '');
-                 // Note: Focusing input on touch can be tricky/disruptive on mobile
               } else {
                   inputElement.value('');
                  inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
               }
 
-            touchGrabbed = true; // Mark that an item is grabbed by touch
+            touchGrabbed = true;
              if (event.cancelable) event.preventDefault();
-            return false; // Prevent default behavior
+            return false;
           }
         }
       }
-    return true; // Allow default behavior if nothing was touched
+    return true;
 }
 
 function touchMoved(event) {
-    // Ignore if no touches or if not currently dragging an item by touch
-    if (touches.length === 0 || !grabbedItem || !touchGrabbed) return true;
+    if (touches.length === 0) return true;
 
-    // Get the position of the first touch
     let touchX = touches[0].x;
     let touchY = touches[0].y;
 
-     // Prevent default touch behavior (like scrolling)
-     if (event.cancelable) event.preventDefault();
+     if (grabbedItem && touchGrabbed) {
+          if (event.cancelable) event.preventDefault();
 
-    // Smoothly move the grabbed item towards the touch position
-    grabbedItem.x = lerp(grabbedItem.x, touchX, 0.4);
-    grabbedItem.y = lerp(grabbedItem.y, touchY, 0.4);
+        grabbedItem.x = lerp(grabbedItem.x, touchX, 0.4);
+        grabbedItem.y = lerp(grabbedItem.y, touchY, 0.4);
 
-     return false; // Indicate that the event was handled
+         return false;
+    }
+    return true;
 }
 
 
 function touchEnded(event) {
-     // If an item was grabbed by touch
      if (grabbedItem && touchGrabbed) {
-         // Simulate mouse release logic to handle placing/releasing the item
          mouseReleased();
-         touchGrabbed = false; // Reset touch grab state
-         if (event.cancelable) event.preventDefault(); // Prevent default behavior
-         return false; // Indicate that the event was handled
+         touchGrabbed = false;
+         if (event.cancelable) event.preventDefault();
+         return false;
      }
-    return true; // Allow default behavior if no item was grabbed by touch
+    return true;
 }
 
-// Duplicate of isMouseOverCanvasArea - keeping for safety but could be removed
-// function isMouseOverCanvasArea(pX, pY) {
-//     const checkX = pX === undefined ? mouseX : pX;
-//     const checkY = pY === undefined ? mouseY : pY;
+function isMouseOverCanvasArea(pX, pY) {
+    const checkX = pX === undefined ? mouseX : pX;
+    const checkY = pY === undefined ? mouseY : pY;
 
-//     return checkX >= CANVAS_AREA_X && checkX <= CANVAS_AREA_X + CANVAS_AREA_W &&
-//            checkY >= CANVAS_AREA_Y && checkY <= CANVAS_AREA_Y + CANVAS_AREA_H;
-// }
+    return checkX >= CANVAS_AREA_X && checkX <= CANVAS_AREA_X + CANVAS_AREA_W &&
+           checkY >= CANVAS_AREA_Y && checkY <= CANVAS_AREA_Y + CANVAS_AREA_H;
+}
