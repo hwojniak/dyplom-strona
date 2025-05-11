@@ -1037,106 +1037,82 @@ function windowResized() {
      }
 }
 
+// Handles mouse press events
 function mousePressed() {
-    // Ignore clicks in the header area
-    if (mouseY < HEADER_HEIGHT) {
-        // Check if click was on a DOM element in the header (e.g. button)
-        // If so, allow default behavior. Otherwise, if on empty header space, do nothing.
-        let clickedOnHeaderDOM = false;
-        if (event && event.target) {
-            if(event.target === inputElement.elt ||
-               (savePNGButton && event.target === savePNGButton.elt) ||
-               (saveHighResPNGButton && event.target === saveHighResPNGButton.elt) ||
-               (clearButton && event.target === clearButton.elt) ||
-               (refreshButton && event.target === refreshButton.elt)) {
-                clickedOnHeaderDOM = true;
-            }
+   // Ignore clicks in the header area
+   if (mouseY < HEADER_HEIGHT) {
+       return true; // Allow default browser behavior for header clicks
+    }
+
+   // If an item is already grabbed, check if the click is on the grabbed item itself.
+   // If so, do nothing (mouseMoved will handle dragging). If not, ignore the click.
+   if (grabbedItem) {
+        if (grabbedItem.isMouseOver(mouseX, mouseY)) {
+             // If it's a text item, focus the input field
+             if (grabbedItem.type === 'text') inputElement.elt.focus();
+             return false; // Prevent default behavior (like text selection)
+        } else {
+             return false; // Ignore clicks outside the grabbed item while dragging
         }
-        return clickedOnHeaderDOM; // Allow default if on a UI element, else consume
-     }
- 
-    if (grabbedItem) {
-         if (grabbedItem.isMouseOver(mouseX, mouseY)) {
-              // Item already grabbed, click on it again.
-              // Try to focus canvas for keyboard control
-              if (canvas && typeof canvas.elt.focus === 'function') {
-                 canvas.elt.focus();
-              }
-              return false;
-         } else {
-              // Clicked outside the currently grabbed item, effectively drops it.
-              // Simulate mouseRelease and then re-evaluate this click.
-              // This might be too complex; simpler to just ignore clicks outside grabbed item for now.
-              return false;
-         }
-    }
- 
-    // Attempt to focus the canvas element whenever a mouse press occurs outside the header
-    // that might lead to an item grab. This prepares for keyboard interaction.
-    if (canvas && typeof canvas.elt.focus === 'function') {
-         canvas.elt.focus();
-    }
- 
-    // Check for clicks on placed items
-    if (isMouseOverCanvasArea(mouseX, mouseY)) {
-        for (let i = placedItems.length - 1; i >= 0; i--) {
-             if (placedItems[i].isMouseOver(mouseX, mouseY)) {
-                 grabbedItem = placedItems[i];
-                 grabbedItem.isGrabbed = true;
-                 grabbedItem.isPlacing = false;
-                 grabbedItem.solidify();
- 
-                 let temp = placedItems.splice(i, 1)[0];
-                 shapes.push(temp); // Move to shapes to be drawn on top
- 
-                 if (grabbedItem.type === 'text') {
-                     inputElement.value(grabbedItem.content || '');
-                     inputElement.attribute('placeholder', '');
-                     // DO NOT FOCUS inputElement.elt.focus();
+   }
+
+   // Check for clicks on placed items within the canvas area (check top-most item first)
+   if (isMouseOverCanvasArea(mouseX, mouseY)) {
+       for (let i = placedItems.length - 1; i >= 0; i--) {
+            if (placedItems[i].isMouseOver(mouseX, mouseY)) {
+                // Found a placed item, grab it
+                grabbedItem = placedItems[i];
+                grabbedItem.isGrabbed = true;
+                grabbedItem.isPlacing = false; // Stop landing animation
+                grabbedItem.solidify(); // Stop any residual movement
+
+                // Move the grabbed item from placedItems to shapes (so it's drawn on top)
+                let temp = placedItems.splice(i, 1)[0];
+                shapes.push(temp);
+
+                // If it's a text item, populate and focus the input field
+                if (grabbedItem.type === 'text') {
+                    inputElement.value(grabbedItem.content || '');
+                    inputElement.attribute('placeholder', ''); // Clear placeholder when editing
+                    inputElement.elt.focus();
                  } else {
-                     inputElement.value('');
-                     inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-                     if (document.activeElement === inputElement.elt) inputElement.elt.blur();
+                    // If not text, clear input and blur focus
+                    inputElement.value('');
+                    inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+                    inputElement.elt.blur();
                  }
-                 // Canvas focus should already be attempted above.
-                 return false;
-            }
-        }
-    }
- 
-   // Check for clicks on floating shapes
-   for (let i = shapes.length - 1; i >= 0; i--) {
-       if (!shapes[i].isGrabbed) {
-           if (shapes[i].isMouseOver(mouseX, mouseY)) {
-               grabbedItem = shapes[i];
-               grabbedItem.isGrabbed = true;
-               grabbedItem.isPlacing = false;
-               grabbedItem.solidify();
- 
-               let temp = shapes.splice(i, 1)[0];
-               shapes.push(temp); // Move to end of shapes for draw order
- 
-               if (grabbedItem.type === 'text') {
-                  inputElement.value(grabbedItem.content || '');
-                  inputElement.attribute('placeholder', '');
-                  // DO NOT FOCUS inputElement.elt.focus();
-               } else {
-                  inputElement.value('');
-                  inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-                  if (document.activeElement === inputElement.elt) inputElement.elt.blur();
-               }
-               // Canvas focus should already be attempted above.
-               return false;
+                return false; // Prevent default behavior
            }
        }
    }
-    // If click was not on header UI, not on an item, and no item grabbed:
-    // Consider deselecting any focused input.
-    if (document.activeElement === inputElement.elt) {
-         inputElement.elt.blur();
-    }
-    return true; // Allow default if no interaction
- }
+
+  // If no placed item was clicked, check for clicks on floating shapes (check top-most first)
+  for (let i = shapes.length - 1; i >= 0; i--) {
+      if (!shapes[i].isGrabbed) { // Only consider shapes that aren't already grabbed (shouldn't happen, but safe)
+          if (shapes[i].isMouseOver(mouseX, mouseY)) {
+              grabbedItem = shapes[i];
+              grabbedItem.isGrabbed = true;
+              grabbedItem.isPlacing = false;
+              grabbedItem.solidify();
+
+              let temp = shapes.splice(i, 1)[0];
+              shapes.push(temp);
+
+              if (grabbedItem.type === 'text') {
+                 inputElement.value(grabbedItem.content || '');
+                 inputElement.attribute('placeholder', '');
+                 inputElement.elt.focus();
+              } else {
+                 inputElement.value('');
+                 inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+                  inputElement.elt.blur();
+              }
+              return false;
+          }
+      }
+  }
+   return true;
+}
 
 // Handles mouse release events
 function mouseReleased() {
@@ -1271,15 +1247,16 @@ function mouseWheel(event) {
 }
 
 // Handles key press events
-function keyPressed(event) {
-    // If the input element is focused, let it handle typing (including Ctrl+A, Ctrl+C etc. in the input)
+function keyPressed(event) { // Add event parameter if p5.js doesn't pass it implicitly
+    // If the input element is focused, let the browser handle key presses for typing
     if (document.activeElement === inputElement.elt) {
-        // If Enter is pressed in the input, your existing listener on inputElement handles it.
-        // Browser default for Ctrl + =/- in an input field is NOT zoom, so this path is likely okay.
-        return true;
+        if (keyCode === ENTER) {
+            return true; // Allow default propagation here, listener will preventDefault if needed
+        }
+        return true; // Allow other keys for typing
     }
 
-    // If focus is on some other interactive element (not body, not canvas, not our input), let it be.
+    // If focus is not on the body or canvas, let the browser handle it
     if (document.activeElement !== document.body && document.activeElement !== canvas.elt) {
         return true;
     }
@@ -1291,47 +1268,41 @@ function keyPressed(event) {
         const maxScale = 10.0;
 
         if (keyIsDown(CONTROL)) {
-            // --- START: Attempt to prevent default for ANY Ctrl combo if item is grabbed ---
-            let processedCtrlKey = false; // Flag to see if we specifically handled a combo
-            // --- END ---
-
             // Check for Ctrl + Equals Key OR Ctrl + Numpad Plus for scale up
-            if (key === '=' || keyCode === 107) { // 107 Numpad Add
+            if (key === '=' || keyCode === 107) { // 107 is Numpad Add
                 grabbedItem.scaleFactor *= scaleIncrement;
                 grabbedItem.scaleFactor = min(grabbedItem.scaleFactor, maxScale);
-                processedCtrlKey = true;
+                if (event && typeof event.preventDefault === 'function') {
+                    event.preventDefault(); // PREVENT BROWSER ZOOM
+                }
+                return false; // Consume the event
             }
             // Check for Ctrl + Hyphen Key OR Ctrl + Numpad Minus for scale down
-            else if (key === '-' || keyCode === 109) { // 109 Numpad Subtract
+            if (key === '-' || keyCode === 109) { // 109 is Numpad Subtract
                 grabbedItem.scaleFactor *= scaleDecrement;
                 grabbedItem.scaleFactor = max(grabbedItem.scaleFactor, minScale);
-                processedCtrlKey = true;
+                if (event && typeof event.preventDefault === 'function') {
+                    event.preventDefault(); // PREVENT BROWSER ZOOM
+                }
+                return false; // Consume the event
             }
-            // Example: Could add Ctrl+D for duplicate here
-            // else if ((key === 'd' || key === 'D') && !processedCtrlKey) { /* duplicate logic */ processedCtrlKey = true; }
-
-
-            // --- If any Ctrl+key was specifically processed OR even if not, but Ctrl is down while grabbed ---
-            // We want to prevent default browser actions.
+            // For other Ctrl+key combinations while an item is grabbed, prevent default and consume
+            // This helps avoid unintended browser actions.
             if (event && typeof event.preventDefault === 'function') {
-                event.preventDefault(); // PREVENT BROWSER DEFAULTS FOR CTRL KEYS (zoom, print, find etc.)
+                 event.preventDefault();
             }
-            return false; // Consume the event as we are in a "grabbed item + Ctrl" context
-        }
-        // ... (rest of the code for NO CONTROL KEY)
-        else { // CONTROL key is NOT pressed
+            return false;
+
+        } else { // CONTROL key is NOT pressed
             if (keyCode === DELETE) {
                 shapes = shapes.filter(s => s !== grabbedItem);
                 placedItems = placedItems.filter(s => s !== grabbedItem);
-                let wasTextInput = grabbedItem.type === 'text';
                 grabbedItem = null;
                 inputElement.value('');
                 inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-                if (wasTextInput || document.activeElement === inputElement.elt) { // Blur if it was text or if input had focus
-                    inputElement.elt.blur();
-                }
+                inputElement.elt.blur();
                 if (event && typeof event.preventDefault === 'function') {
-                    event.preventDefault(); // Prevent back navigation on some browsers for DELETE
+                    event.preventDefault(); // e.g., prevent back navigation if backspace triggered delete
                 }
                 return false;
             }
@@ -1340,38 +1311,35 @@ function keyPressed(event) {
                 if (keyCode === BACKSPACE) {
                     if (grabbedItem.content.length > 0) {
                         grabbedItem.content = grabbedItem.content.slice(0, -1);
-                        inputElement.value(grabbedItem.content); // Sync input
+                        inputElement.value(grabbedItem.content);
                     }
                     if (event && typeof event.preventDefault === 'function') {
-                        event.preventDefault(); // Prevent browser back navigation
+                         event.preventDefault(); // Prevent potential browser back navigation
                     }
                     return false;
-                } else if (key.length === 1 && !keyIsDown(ALT) && !keyIsDown(META)) { // Printable characters, ignore Alt+key or Cmd+key
+                } else if (key.length === 1) { // Printable characters
                     grabbedItem.content += key;
-                    inputElement.value(grabbedItem.content); // Sync input
-                    // No preventDefault usually, as we want the char. Returning false consumes for p5.
+                    inputElement.value(grabbedItem.content);
+                    // No preventDefault here usually, as we want the character typed.
+                    // But returning false consumes it for p5, preventing other potential handlers.
                     return false;
                 }
                 // For other non-Ctrl, non-Delete, non-Backspace, non-printable keys on TEXT item
-                // (e.g., Arrow keys, Home, End, PageUp/Down, Enter, Tab if not handled by input focus)
-                // Consume to prevent default browser actions like scrolling or changing focus.
+                // Consume to prevent default browser actions like scrolling with arrow keys.
                 if (event && typeof event.preventDefault === 'function') {
-                    event.preventDefault();
+                     event.preventDefault();
                 }
                 return false;
             }
 
-            // If it's a SHAPE (not text) and a non-Ctrl key is pressed, consume
-            // (e.g. to prevent typing 'a' from doing something if a shape is held).
+            // If it's a SHAPE (not text) and a non-Ctrl key is pressed, consume.
             if (event && typeof event.preventDefault === 'function') {
                 event.preventDefault();
             }
             return false;
         }
     }
-
-    // If no item is grabbed and the key wasn't handled above, allow default.
-    return true;
+    return true; // Allow default if no item grabbed and input not focused
 }
 
 // Creates a new text shape from the input field content and adds it to floating shapes
@@ -1746,110 +1714,93 @@ function restartAll() {
 let touchGrabbed = false; // Is a touch currently being used to drag an item?
 
 function touchStarted(event) {
+    // Ignore if no touches are active
     if (touches.length === 0) return true;
+
+    // Get the position of the first touch
     let touchX = touches[0].x;
     let touchY = touches[0].y;
 
+    // Ignore touches in the header area
     if (touchY < HEADER_HEIGHT) {
-         // Check if touch was on a DOM element in the header
-         let touchedHeaderDOM = false;
-         if (event && event.target) {
-           if(event.target === inputElement.elt ||
-              (savePNGButton && event.target === savePNGButton.elt) ||
-              (saveHighResPNGButton && event.target === saveHighResPNGButton.elt) ||
-              (clearButton && event.target === clearButton.elt) ||
-              (refreshButton && event.target === refreshButton.elt)) {
-               touchedHeaderDOM = true;
-           }
+         if (event.cancelable) event.preventDefault(); // Prevent default touch behavior (like scrolling)
+         return true; // Allow default behavior for header
+    }
+
+     // If an item is already grabbed by mouse or another touch, check if this touch is on it
+     // If so, mark touchGrabbed as true. If not, ignore this touch.
+     if (grabbedItem) {
+          if (grabbedItem.isMouseOver(touchX, touchY)) {
+              touchGrabbed = true; // This touch is controlling the grabbed item
+               if (event.cancelable) event.preventDefault();
+             return false; // Prevent default behavior
+          } else {
+               // If already grabbed but this touch is elsewhere, ignore
+               if (event.cancelable) event.preventDefault();
+               return false; // Prevent default behavior
+          }
+     }
+
+     // Check for touches on placed items within the canvas area (check top-most first)
+     if (isMouseOverCanvasArea(touchX, touchY)) {
+         for (let i = placedItems.length - 1; i >= 0; i--) {
+             if (placedItems[i].isMouseOver(touchX, touchY)) {
+                  // Found a placed item, grab it
+                  grabbedItem = placedItems[i];
+                  grabbedItem.isGrabbed = true;
+                  grabbedItem.isPlacing = false;
+                  grabbedItem.solidify();
+
+                  // Move from placedItems to shapes array
+                  let temp = placedItems.splice(i, 1)[0]; shapes.push(temp);
+
+                 // If text, update input field
+                 if (grabbedItem.type === 'text') {
+                     inputElement.value(grabbedItem.content || '');
+                     inputElement.attribute('placeholder', '');
+                     // Note: Focusing input on touch can be tricky/disruptive on mobile
+                  } else {
+                      inputElement.value('');
+                     inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+                  }
+
+                 touchGrabbed = true; // Mark that an item is grabbed by touch
+                  if (event.cancelable) event.preventDefault();
+                 return false; // Prevent default behavior
+             }
          }
-         if (touchedHeaderDOM) {
-             // Allow default for UI elements, which might include focus or click.
-             // For touch, often need to prevent default for other canvas interactions.
-             // But for buttons, might want default. This is tricky. For now, if header UI, allow default.
-             return true;
-         } else {
-             // Touched empty header space
-             if (event.cancelable) event.preventDefault(); // Prevent scroll/zoom
-             return false; // Consume
-         }
-    }
+     }
 
-    if (grabbedItem) {
-        if (grabbedItem.isMouseOver(touchX, touchY)) {
-            touchGrabbed = true;
-            if (canvas && typeof canvas.elt.focus === 'function') { // Keep canvas focus
-                canvas.elt.focus();
-            }
-            if (event.cancelable) event.preventDefault();
-            return false;
-        } else {
-            if (event.cancelable) event.preventDefault(); // Ignored touch
-            return false;
-        }
-    }
-
-    // Attempt to focus canvas for upcoming interactions
-    if (canvas && typeof canvas.elt.focus === 'function') {
-        canvas.elt.focus();
-    }
-
-    // Check placed items
-    if (isMouseOverCanvasArea(touchX, touchY)) {
-        for (let i = placedItems.length - 1; i >= 0; i--) {
-            if (placedItems[i].isMouseOver(touchX, touchY)) {
-                grabbedItem = placedItems[i];
-                grabbedItem.isGrabbed = true; // etc.
-                // ... (same logic as mousePressed for setting grabbedItem properties) ...
-                grabbedItem.isPlacing = false;
-                grabbedItem.solidify();
-                let temp = placedItems.splice(i, 1)[0]; shapes.push(temp);
-
-                if (grabbedItem.type === 'text') {
-                    inputElement.value(grabbedItem.content || '');
-                    inputElement.attribute('placeholder', '');
-                    // DO NOT FOCUS inputElement on touch either for consistency
-                } else {
-                    inputElement.value('');
-                    inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-                    if (document.activeElement === inputElement.elt) inputElement.elt.blur();
-                }
-                touchGrabbed = true;
-                if (event.cancelable) event.preventDefault();
-                return false;
-            }
-        }
-    }
-
-    // Check floating shapes
-    for (let i = shapes.length - 1; i >= 0; i--) {
-        if (!shapes[i].isGrabbed && shapes[i].isMouseOver(touchX, touchY)) {
+     // If no placed item was touched, check for touches on floating shapes
+     for (let i = shapes.length - 1; i >= 0; i--) {
+        if (!shapes[i].isGrabbed) {
+          if (shapes[i].isMouseOver(touchX, touchY)) {
+            // Found a floating shape, grab it
             grabbedItem = shapes[i];
-             // ... (same logic as mousePressed for setting grabbedItem properties) ...
             grabbedItem.isGrabbed = true;
             grabbedItem.isPlacing = false;
             grabbedItem.solidify();
+
+            // Move to end of shapes array
             let temp = shapes.splice(i, 1)[0]; shapes.push(temp);
 
-            if (grabbedItem.type === 'text') {
-                inputElement.value(grabbedItem.content || '');
-                inputElement.attribute('placeholder', '');
-            } else {
-                inputElement.value('');
-                inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-                if (document.activeElement === inputElement.elt) inputElement.elt.blur();
-            }
-            touchGrabbed = true;
-            if (event.cancelable) event.preventDefault();
-            return false;
-        }
-    }
+             // If text, update input field
+             if (grabbedItem.type === 'text') {
+                 inputElement.value(grabbedItem.content || '');
+                 inputElement.attribute('placeholder', '');
+                 // Note: Focusing input on touch can be tricky/disruptive on mobile
+              } else {
+                  inputElement.value('');
+                 inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+              }
 
-    // If touch was not on header UI, not on an item, and no item grabbed:
-    if (document.activeElement === inputElement.elt) {
-         inputElement.elt.blur(); // Deselect input
-    }
-    if (event.cancelable) event.preventDefault(); // Prevent general page scroll/zoom if touch unhandled
-    return false; // Consume unhandled touches outside header UI.
+            touchGrabbed = true; // Mark that an item is grabbed by touch
+             if (event.cancelable) event.preventDefault();
+            return false; // Prevent default behavior
+          }
+        }
+      }
+    return true; // Allow default behavior if nothing was touched
 }
 
 function touchMoved(event) {
