@@ -151,8 +151,8 @@ function getHexagonVertices(size) {
     }
     return vertices;
 }
-// Approximates a circle with vertices
-function getCircleVertices(size, segments = 60) { // Increased segments for smoother circle
+// Approximates a circle with vertices (only used for isMouseOver polygon check if needed, not drawing)
+function getCircleVertices(size, segments = 60) { // Increased segments for smoother circle check if polygon check were used
     if (isNaN(size) || size <= 0) return [];
     let radius = size; // Matches original scaling (ellipse used diameter, but size * 2 was used, implying size was radius)
     let vertices = [];
@@ -217,7 +217,7 @@ function getTextBounds(content, effectiveTextSize, fontRef) {
     // Ensure the measurement buffer exists and is configured
     if (!textMeasurePG || typeof textMeasurePG.textWidth !== 'function') {
         // If buffer is missing or invalid, return estimated bounds
-        // console.warn("textMeasurePG missing or invalid, returning estimated bounds.");
+        // console.warn("textMeasurePG missing or invalid, returning estimated bounds for:", content); // Debugging
          return { w: (content ? content.length : 1) * 0.6 * effectiveTextSize, h: effectiveTextSize * 1.2 };
     }
 
@@ -227,18 +227,20 @@ function getTextBounds(content, effectiveTextSize, fontRef) {
         // Check if fontRef is a p5.Font object before trying textFont(object)
         if (fontRef && typeof fontRef === 'object' && typeof fontRef.textWidth === 'function' && typeof textMeasurePG.textFont === 'function') {
             textMeasurePG.textFont(fontRef); // Use the p5.Font object
+             // console.log("Measuring with loaded font:", fontRef.fontName || "unknown"); // DEBUG FONT
         } else if (typeof textMeasurePG.textFont === 'function') {
             textMeasurePG.textFont(baseFont); // Fallback to monospace string
+             // console.log("Measuring with fallback font:", baseFont); // DEBUG FONT
         } else {
              // textFont method missing on buffer, return estimated bounds
-             // console.warn("textMeasurePG.textFont missing, returning estimated bounds.");
+             // console.warn("textMeasurePG.textFont missing for measurement, returning estimated bounds.");
              return { w: (content ? content.length : 1) * 0.6 * effectiveTextSize, h: effectiveTextSize * 1.2 };
         }
 
-        if (typeof textMeasurePG.textSize !== 'function') { /* console.warn("textMeasurePG.textSize missing"); */ return { w: (content ? content.length : 1) * 0.6 * effectiveTextSize, h: effectiveTextSize * 1.2 }; }
+        if (typeof textMeasurePG.textSize !== 'function') { /* console.warn("textMeasurePG.textSize missing for measurement"); */ return { w: (content ? content.length : 1) * 0.6 * effectiveTextSize, h: effectiveTextSize * 1.2 }; }
         textMeasurePG.textSize(effectiveTextSize);
 
-         if (typeof textMeasurePG.textAlign !== 'function') { /* console.warn("textMeasurePG.textAlign missing"); */ return { w: (content ? content.length : 1) * 0.6 * effectiveTextSize, h: effectiveTextSize * 1.2 }; }
+         if (typeof textMeasurePG.textAlign !== 'function') { /* console.warn("textMeasurePG.textAlign missing for measurement"); */ return { w: (content ? content.length : 1) * 0.6 * effectiveTextSize, h: effectiveTextSize * 1.2 }; }
         textMeasurePG.textAlign(CENTER, CENTER);
 
 
@@ -496,14 +498,22 @@ class FloatingShape {
                  return;
              }
         } else { // Shape
-             if (typeof graphics.beginShape !== 'function' || typeof graphics.vertex !== 'function' || typeof graphics.endShape !== 'function') {
-                 // console.warn("Graphics context missing shape drawing functions."); // Debugging
-                 return;
-             }
              // Check size sanity for shapes
              if (isNaN(psize) || psize <= 0) {
                   // console.warn("Invalid size for shape primitive:", psize); // Debugging
                   return;
+             }
+              // Need specific checks for ellipse or beginShape functions
+             if (pshapeType === 'circle') {
+                  if (typeof graphics.ellipse !== 'function') {
+                       // console.warn("Graphics context missing ellipse drawing function for circle."); // Debugging
+                       return;
+                  }
+             } else { // Polygons
+                  if (typeof graphics.beginShape !== 'function' || typeof graphics.vertex !== 'function' || typeof graphics.endShape !== 'function') {
+                       // console.warn("Graphics context missing polygon drawing functions for shape:", pshapeType); // Debugging
+                       return;
+                  }
              }
         }
 
@@ -515,8 +525,10 @@ class FloatingShape {
              // Check if itemFont is a valid p5.Font object (truthy) before using textFont(object)
             if (itemFont && typeof itemFont === 'object' && typeof itemFont.textWidth === 'function') {
                 graphics.textFont(itemFont); // Use the p5.Font object
+                 // console.log("Attempting to draw text with font object:", itemFont.fontName || "unknown"); // DEBUG FONT
             } else {
                 graphics.textFont(baseFont); // Fallback string
+                 // console.log("Attempting to draw text with fallback font:", baseFont); // DEBUG FONT
             }
 
             graphics.textAlign(CENTER, CENTER);
@@ -531,37 +543,46 @@ class FloatingShape {
 
 
         } else { // It's a shape
-            // Get vertices for the specific shape type based on psize
-            let vertices = [];
+            // Fill and Stroke are expected to be set in the calling display() method
             switch (pshapeType) {
-                case 'circle':    vertices = getCircleVertices(psize); break;
-                case 'square':    vertices = getSquareVertices(psize); break;
-                case 'triangle':  vertices = getTriangleVertices(psize); break;
-                case 'pentagon':  vertices = getPentagonVertices(psize); break;
-                case 'hexagon':   vertices = getHexagonVertices(psize); break;
+                case 'circle':
+                   // Draw circle using ellipse() directly
+                   graphics.ellipse(px, py, psize * 2); // psize is treated as radius, so diameter is psize * 2
+                   break;
+                case 'square':
+                case 'triangle':
+                case 'pentagon':
+                case 'hexagon':
+                     // Get vertices for the specific polygon shape
+                    let vertices = [];
+                    switch (pshapeType) {
+                        case 'square':    vertices = getSquareVertices(psize); break;
+                        case 'triangle':  vertices = getTriangleVertices(psize); break;
+                        case 'pentagon':  vertices = getPentagonVertices(psize); break;
+                        case 'hexagon':   vertices = getHexagonVertices(psize); break;
+                    }
+
+                    // Check if we got valid vertices
+                    if (!Array.isArray(vertices) || vertices.length < 3) {
+                         // console.warn("Not enough vertices for shape:", pshapeType, vertices ? vertices.length : 0); // Debugging
+                         return; // Need at least 3 vertices to form a polygon
+                    }
+
+                    // Draw the polygon using vertices
+                    graphics.beginShape();
+                    for (let v of vertices) {
+                         if (isNaN(v.x) || isNaN(v.y)) {
+                              // console.warn("Skipping NaN vertex in shape:", v); // Debugging
+                              continue; // Skip invalid vertices
+                         }
+                        graphics.vertex(px + v.x, py + v.y); // Draw vertex relative to px, py (which is 0,0 here)
+                    }
+                    graphics.endShape(CLOSE);
+                    break;
                 default:
                      // console.warn("Unknown shape type:", pshapeType); // Debugging
                      return; // Don't attempt to draw unknown shapes
             }
-
-            // Check if we got valid vertices
-            if (!Array.isArray(vertices) || vertices.length < 3) {
-                 // console.warn("Not enough vertices for shape:", pshapeType, vertices ? vertices.length : 0); // Debugging
-                 return; // Need at least 3 vertices to form a polygon
-            }
-
-            // Draw the polygon using vertices
-            // Fill and Stroke are expected to be set in the calling display() method
-            graphics.beginShape();
-            for (let v of vertices) {
-                 // Sanity check vertex coordinates
-                 if (isNaN(v.x) || isNaN(v.y)) {
-                      // console.warn("Skipping NaN vertex in shape:", v); // Debugging
-                      continue; // Skip invalid vertices
-                 }
-                graphics.vertex(px + v.x, py + v.y); // Draw vertex relative to px, py (which is 0,0 here)
-            }
-            graphics.endShape(CLOSE);
         }
     }
 
@@ -604,38 +625,37 @@ class FloatingShape {
             return isPointInAxisAlignedRect(localMx, localMy, textBounds.w, textBounds.h, localTolerance);
 
         } else { // type is 'shape'
-            // Get vertices for collision check (these use the raw 'size', not scaled)
-             let collisionVertices = [];
+            // Collision check based on shape type
+             if (isNaN(this.size) || this.size <= 0) {
+                 return false; // Cannot check collision for invalid size
+             }
             switch (this.shapeType) {
-                 // Collision checks use slightly different size interpretation or specific math
+                 // Circle collision is simple distance check from local origin
                 case 'circle':
-                   // Circle collision is simple distance check from local origin
-                   return dist(localMx, localMy, 0, 0) <= this.size + localTolerance;
+                   return dist(localMx, localMy, 0, 0) <= this.size + localTolerance; // size is radius here
                 case 'square':
                    // Square collision uses axis-aligned rect check based on size
-                   return isPointInAxisAlignedRect(localMx, localMy, this.size, this.size, localTolerance);
+                   return isPointInAxisAlignedRect(localMx, localMy, this.size, this.size, localTolerance); // size is side length here
                 case 'triangle':
-                    collisionVertices = getTriangleVertices(this.size); // Use size as scaling factor
-                   break; // Then perform polygon check
                 case 'pentagon':
-                    collisionVertices = getPentagonVertices(this.size); // Use size * 0.7 as radius
-                    break; // Then perform polygon check
                 case 'hexagon':
-                     collisionVertices = getHexagonVertices(this.size); // Use size as radius
-                     break; // Then perform polygon check
+                     // For polygon shapes, check inside or near edge using vertices
+                    let collisionVertices = [];
+                    switch (this.shapeType) {
+                        case 'triangle':  collisionVertices = getTriangleVertices(this.size); break; // Use size as scaling factor
+                        case 'pentagon':  collisionVertices = getPentagonVertices(this.size); break; // Use size * 0.7 as radius
+                        case 'hexagon':   collisionVertices = getHexagonVertices(this.size); break; // Use size as radius
+                    }
+                    if (!Array.isArray(collisionVertices) || collisionVertices.length < 3) {
+                         return false; // Cannot check collision for invalid polygon
+                    }
+                    // Check strict inside *or* near edge
+                    if (isPointInConvexPolygon(localMx, localMy, collisionVertices)) return true;
+                    return isPointNearPolygonEdge(localMx, localMy, collisionVertices, localTolerance);
                  default:
-                      // Fallback for unknown or shapes without specific vertex functions
-                      // Use a simplified check like distance to center based on original size
-                      return dist(localMx, localMy, 0, 0) <= this.size * 0.7 + localTolerance; // Rough radius estimate
+                      // Fallback for unknown or shapes without specific collision functions
+                      return dist(localMx, localMy, 0, 0) <= this.size * 0.7 + localTolerance; // Rough radius estimate based on size
             }
-
-            // For polygon shapes (triangle, pentagon, hexagon), check inside or near edge
-            if (!Array.isArray(collisionVertices) || collisionVertices.length < 3) {
-                 return false; // Cannot check collision for invalid polygon
-            }
-            // Check strict inside *or* near edge
-            if (isPointInConvexPolygon(localMx, localMy, collisionVertices)) return true;
-            return isPointNearPolygonEdge(localMx, localMy, collisionVertices, localTolerance);
         }
     }
 
@@ -682,8 +702,22 @@ function setup() {
 
     SNAP_INCREMENT_RADIANS = radians(15); // Snap rotation to 15 degrees
 
+    // --- Filter usable fonts after they are loaded in preload ---
+    // This array will be used by both reset() and addNewTextShapeFromInput()
+    // Check for truthiness and basic font properties
+    usableFonts = [
+        fontBangersRegular, fontBoogalooRegular, fontBreeSerifRegular, fontCaveatBrushRegular,
+        fontCherryBombOneRegular, fontCinzelDecorativeBlack, fontCinzelDecorativeBold,
+        fontCinzelDecorativeRegular, fontDynaPuffBold, fontDynaPuffMedium, fontDynaPuffRegular,
+        fontInterBold, fontInterRegular, fontPixelifySansRegular, fontSenBold, fontSenMedium,
+        fontSenRegular, fontShareTechMonoRegular, fontVT323Regular
+    ].filter(f => f && typeof f === 'object' && typeof f.textWidth === 'function'); // Filter for valid p5.Font objects
+
+    // console.log("Usable fonts after filtering:", usableFonts.length, usableFonts); // Debugging usable fonts array
+
+
     // Create the text measurement buffer (small, won't be drawn to main canvas)
-    // Ensure it has valid dimensions
+    // Ensure it has valid dimensions and font set
     if (!textMeasurePG || typeof textMeasurePG.textWidth !== 'function') {
          try {
               if (textMeasurePG) { textMeasurePG.remove(); } // Clean up previous if exists
@@ -700,28 +734,7 @@ function setup() {
               console.error("Failed to initialize textMeasurePG in setup:", e);
               textMeasurePG = null; // Set to null if creation failed
          }
-     } else {
-          // textMeasurePG already exists and seems valid, ensure font is set if needed
-          if (usableFonts.length > 0 && typeof textMeasurePG.textFont === 'function') {
-              // Optionally update font if first usable font changed, though less critical for measurement
-           } else if (baseFont && typeof textMeasurePG.textFont === 'function') {
-           }
-          // console.log("textMeasurePG already initialized in setup"); // Debugging
      }
-
-
-    // --- Filter usable fonts after they are loaded in preload ---
-    // This array will be used by both reset() and addNewTextShapeFromInput()
-    // Check for truthiness and basic font properties
-    usableFonts = [
-        fontBangersRegular, fontBoogalooRegular, fontBreeSerifRegular, fontCaveatBrushRegular,
-        fontCherryBombOneRegular, fontCinzelDecorativeBlack, fontCinzelDecorativeBold,
-        fontCinzelDecorativeRegular, fontDynaPuffBold, fontDynaPuffMedium, fontDynaPuffRegular,
-        fontInterBold, fontInterRegular, fontPixelifySansRegular, fontSenBold, fontSenMedium,
-        fontSenRegular, fontShareTechMonoRegular, fontVT323Regular
-    ].filter(f => f && typeof f === 'object' && typeof f.textWidth === 'function'); // Filter for valid p5.Font objects
-
-    // console.log("Usable fonts after filtering:", usableFonts.length); // Debugging
 
 
     // Create DOM elements
@@ -986,9 +999,9 @@ function positionDOMElementsAndCanvasPG() {
               textMeasurePG = createGraphics(10, 10); // Minimal size
               // Re-apply essential text properties after creation
               if (usableFonts.length > 0 && typeof textMeasurePG.textFont === 'function') {
-                   textMeasurePG.textFont(usableFonts[0]); // Use the first usable font for measurement
+                   textMeasurePG.textFont(usableFonts[0]); // Use the first usable font for measurement if available
                } else if (baseFont && typeof textMeasurePG.textFont === 'function') {
-                   textMeasurePG.textFont(baseFont); // Fallback
+                   textMeasurePG.textFont(baseFont); // Fallback to monospace string
                }
                if (typeof textMeasurePG.textAlign === 'function') textMeasurePG.textAlign(CENTER, CENTER);
                // console.log("textMeasurePG re-initialized successfully in position function"); // Debugging
@@ -996,9 +1009,6 @@ function positionDOMElementsAndCanvasPG() {
               console.error("Failed to re-initialize textMeasurePG:", e);
               textMeasurePG = null; // Set to null if creation failed
          }
-     } else {
-          // textMeasurePG exists, ensure font is set if needed (less critical on resize)
-          // console.log("textMeasurePG already exists in position function"); // Debugging
      }
 
 
@@ -1250,7 +1260,7 @@ function mouseWheel(event) {
               let item = placedItems[i];
               if (item.isMouseOver(mouseX, mouseY)) {
                   item.rotation += event.delta * 0.002;
-                   item.solidify(); // Ensure it doesn't start floating due to rotation? (Might not be needed)
+                   // item.solidify(); // Might not be needed here
                   return false; // Prevent default page scroll
               }
          }
@@ -1258,7 +1268,7 @@ function mouseWheel(event) {
          return false; // Prevent default page scroll
     }
 
-    // Allow default page scroll outside the canvas area if not dragging
+    // Allow default page scroll otherwise
     return true;
 }
 
@@ -1342,7 +1352,7 @@ function addNewTextShapeFromInput() {
 
     // Assign a random usable font (reset() already did this, but re-confirm if needed)
      if (usableFonts.length > 0) {
-         newTextShape.font = random(usableFonts);
+         newTextShape.font = random(usableFonts); // Assign p5.Font object
      } else {
           newTextShape.font = baseFont; // Fallback
      }
@@ -1869,18 +1879,5 @@ function touchEnded(event) {
     }
 
     // Allow default browser behavior if no item was grabbed by touch
-    // Note: Double-tap handling already consumes the touchStarted and potentially prevents default.
-    // Regular taps will proceed here after touchStarted. We might want to prevent default
-    // on a single tap as well if it's below the header to avoid tap-to-zoom or other issues.
-     if (touches.length > 0 && touches[0].y >= HEADER_HEIGHT) {
-         // We need to be careful not to break actual clicks on DOM elements.
-         // Since our touchStarted already prevents default for taps on shapes/canvas area,
-         // this might not be strictly necessary here, but let's add it defensively
-         // if event wasn't already consumed and it's below the header.
-         // The p5 touch handlers manage preventDefault automatically if they return false.
-         // The key is ensuring touchStarted/touchMoved returned false when active.
-         // If touchStarted fell through, this touchEnded will also fall through.
-     }
-
     return true;
 }
