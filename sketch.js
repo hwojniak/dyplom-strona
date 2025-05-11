@@ -1,4 +1,4 @@
---- START OF FILE sketch.js ---
+//--- START OF FILE sketch.js ---
 // FIX: Efficiency issues significantly improved with canvasPG and textMeasurePG
 // This version addresses user-specific bugs and preferences for Step 1.
 
