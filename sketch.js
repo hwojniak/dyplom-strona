@@ -835,6 +835,7 @@ function draw() {
          fill(50);
          textSize(20);
          textAlign(LEFT, CENTER);
+          // Use textFont directly in the main drawing context
           if (fontSenRegular && typeof fontSenRegular.text === 'function') {
               textFont(fontSenRegular);
           } else {
@@ -894,10 +895,11 @@ function positionDOMElementsAndCanvasPG() {
           try {
                textMeasurePG = createGraphics(10, 10);
                // Re-apply essential text properties
-                if (fontSenRegular && typeof fontSenRegular.text === 'function') {
+                // Check for truthiness before calling textFont
+                if (fontSenRegular) {
                     textMeasurePG.textFont(fontSenRegular);
-                } else if (baseFont && typeof textMeasurePG.textFont === 'function') {
-                    textMeasurePG.textFont(baseFont);
+                } else {
+                    textMeasurePG.textFont(baseFont); // Fallback
                 }
                if (typeof textMeasurePG.textAlign === 'function') textMeasurePG.textAlign(CENTER, CENTER);
           } catch(e) {
@@ -1209,8 +1211,9 @@ function addNewTextShapeFromInput() {
         fontVT323Regular
     ];
 
-    // Filter for fonts that loaded successfully AND have a text method (check p5.Font object structure)
-    const usableFonts = potentialFonts.filter(f => f && typeof f.text === 'function');
+    // Filter for fonts that loaded successfully (are truthy)
+    // CORRECTED FILTER: Check if the variable holds a valid font object (is truthy)
+    const usableFonts = potentialFonts.filter(f => f);
 
     if (usableFonts.length > 0) {
         newTextShape.font = random(usableFonts);
@@ -1376,9 +1379,20 @@ function saveCanvasAreaAsHighResPNG() {
             highResPG.fill(item.color);
             highResPG.noStroke();
 
-             let itemFont = (item.font && typeof item.font.text === 'function') ? item.font : baseFont;
+             // Use the font object itself
+             let itemFont = item.font;
              let itemTextScale = isNaN(item.textScaleAdjust) ? 0.2 : item.textScaleAdjust;
              itemTextScale = max(itemTextScale, 1e-3);
+
+             // Check if itemFont is a valid p5.Font object before using it
+             if (itemFont && typeof itemFont.text === 'function') { // Keep this check when applying to graphics context
+                 highResPG.textFont(itemFont);
+             } else {
+                  // Fallback on highResPG if the specific item font is bad
+                  if (fontSenRegular) highResPG.textFont(fontSenRegular);
+                  else highResPG.textFont(baseFont);
+             }
+
 
              item.drawShapePrimitive(highResPG, 0, 0, item.size, item.shapeType, item.type === 'text', itemTextScale);
 
@@ -1433,6 +1447,7 @@ function saveCanvasAreaAsPDF() {
     let pdf = null;
 
      try {
+         // Use this context for PDF creation
          pdf = p5.prototype.createPDF(this);
 
         if (!pdf || typeof pdf.beginRecord !== 'function' || typeof pdf.endRecord !== 'function' || typeof pdf.save !== 'function') {
@@ -1444,12 +1459,11 @@ function saveCanvasAreaAsPDF() {
 
         pdf.beginRecord();
 
-        push();
-        translate(-CANVAS_AREA_X, -CANVAS_AREA_Y);
+        // Set PDF graphics properties
+        pdf.fill(255);
+        pdf.noStroke();
+        pdf.rect(0, 0, CANVAS_AREA_W, CANVAS_AREA_H);
 
-         fill(255);
-         noStroke();
-         rect(0, 0, CANVAS_AREA_W, CANVAS_AREA_H);
 
         for (let i = 0; i < placedItems.length; i++) {
              let item = placedItems[i];
@@ -1459,36 +1473,42 @@ function saveCanvasAreaAsPDF() {
              }
              if (item.scaleFactor <= 0 || item.size <= 0) continue;
 
-            push();
-            translate(item.x, item.y);
-            rotate(item.rotation);
+            pdf.push();
+            // Draw relative to the PDF context origin (0,0)
+            pdf.translate(item.x - CANVAS_AREA_X, item.y - CANVAS_AREA_Y);
+            pdf.rotate(item.rotation);
 
-            scale(item.scaleFactor);
+            pdf.scale(item.scaleFactor);
 
-            fill(item.color);
-            noStroke();
+            pdf.fill(item.color);
+            pdf.noStroke();
 
-             let itemFont = (item.font && typeof item.font.text === 'function') ? item.font : baseFont;
+             // Use the font object itself for PDF
+             let itemFont = item.font;
              let itemTextScale = isNaN(item.textScaleAdjust) ? 0.2 : item.textScaleAdjust;
              itemTextScale = max(itemTextScale, 1e-3);
 
-             if (itemFont && typeof textFont === 'function') {
-                 textFont(itemFont);
+             // Check if itemFont is a valid p5.Font object before using it on PDF
+             if (itemFont && typeof itemFont.text === 'function') { // Check for the text method again for safety
+                 pdf.textFont(itemFont);
+             } else {
+                  // Fallback on PDF if the specific item font is bad
+                   if (fontSenRegular) pdf.textFont(fontSenRegular);
+                  else pdf.textFont(baseFont); // baseFont is a string, pdf might handle it
              }
 
-            item.drawShapePrimitive(this, 0, 0, item.size, item.shapeType, item.type === 'text', itemTextScale);
+            item.drawShapePrimitive(pdf, 0, 0, item.size, item.shapeType, item.type === 'text', itemTextScale);
 
-            pop();
+            pdf.pop();
         }
 
-         push();
-         stroke(0);
-         strokeWeight(1);
-         noFill();
-         rect(0, 0, CANVAS_AREA_W, CANVAS_AREA_H);
-         pop();
+         pdf.push();
+         pdf.stroke(0);
+         pdf.strokeWeight(1);
+         pdf.noFill();
+         pdf.rect(0, 0, CANVAS_AREA_W, CANVAS_AREA_H);
+         pdf.pop();
 
-        pop();
 
         pdf.endRecord();
 
