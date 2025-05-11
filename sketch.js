@@ -1055,27 +1055,30 @@ function mousePressed() {
         return clickedOnHeaderDOM; // Allow default if on a UI element, else consume
      }
  
-    if (grabbedItem) {
-         if (grabbedItem.isMouseOver(mouseX, mouseY)) {
-              // Item already grabbed, click on it again.
-              // Try to focus canvas for keyboard control
-              if (canvas && typeof canvas.elt.focus === 'function') {
-                 canvas.elt.focus();
-              }
-              return false;
-         } else {
-              // Clicked outside the currently grabbed item, effectively drops it.
-              // Simulate mouseRelease and then re-evaluate this click.
-              // This might be too complex; simpler to just ignore clicks outside grabbed item for now.
-              return false;
-         }
+     if (grabbedItem) {
+        if (grabbedItem.isMouseOver(mouseX, mouseY)) {
+             // Item already grabbed, click on it again.
+             // Try to focus canvas for keyboard control
+             // --- CORRECTED CHECK ---
+             if (canvas && canvas.elt && typeof canvas.elt.focus === 'function') {
+                canvas.elt.focus();
+             }
+             // --- END CORRECTED CHECK ---
+             return false;
+        } else {
+        // ...
+        }
     }
  
     // Attempt to focus the canvas element whenever a mouse press occurs outside the header
     // that might lead to an item grab. This prepares for keyboard interaction.
-    if (canvas && typeof canvas.elt.focus === 'function') {
-         canvas.elt.focus();
-    }
+   // Attempt to focus the canvas element whenever a mouse press occurs outside the header
+   // that might lead to an item grab. This prepares for keyboard interaction.
+   // --- CORRECTED CHECK ---
+   if (canvas && canvas.elt && typeof canvas.elt.focus === 'function') {
+    canvas.elt.focus();
+}
+// --- END CORRECTED CHECK ---
  
     // Check for clicks on placed items
     if (isMouseOverCanvasArea(mouseX, mouseY)) {
@@ -1789,9 +1792,11 @@ function touchStarted(event) {
     }
 
     // Attempt to focus canvas for upcoming interactions
-    if (canvas && typeof canvas.elt.focus === 'function') {
+    // --- CORRECTED CHECK ---
+    if (canvas && canvas.elt && typeof canvas.elt.focus === 'function') {
         canvas.elt.focus();
     }
+    // --- END CORRECTED CHECK ---
 
     // Check placed items
     if (isMouseOverCanvasArea(touchX, touchY)) {
