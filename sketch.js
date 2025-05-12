@@ -444,47 +444,43 @@ class FloatingShape {
 
 
   updateLanding() {
-    if (this.isPlacing && !this.isGrabbed) { // Should always be !isGrabbed here now
-      let elapsed = frameCount - this.landFrame;
-      const snapDuration = 12; // <<< Very short duration in frames (e.g., 1/5th sec at 60fps)
+    // Only process landing animation if the shape is being placed (isPlacing) and not currently grabbed
+    if(this.isPlacing && !this.isGrabbed) {
+        // Calculate how many frames have passed since the landing animation started
+        let elapsed = frameCount - this.landFrame;
+        let duration = 60; // Animation lasts 60 frames (about 1 second at 60fps)
 
-      if (elapsed <= snapDuration) {
-        let t = map(elapsed, 0, snapDuration, 0, 1);
-
-        // --- Easing for position (starts fast, slows down) ---
-        // let easedT = 1 - pow(1 - t, 3); // Cubic Ease-Out (smooth)
-        // let easedT = 1 - pow(1 - t, 4); // Quartic Ease-Out (sharper start)
-        let easedT = sqrt(t); // Square Root (simple, fast start) - Adjust if needed!
-        // let easedT = sin(t * HALF_PI); // Sine Ease Out
-
-        // --- Interpolate Position ---
-        // We captured start/target, but since target==start in current setup, no positional zip happens yet.
-        // Let's refine this IF we want a visible zip from mouse pos later.
-        // For now, it locks position instantly based on release.
-        this.x = this.animTargetX; // Keep it locked to target
-        this.y = this.animTargetY;
-
-        // --- Scale Pulse (Sharp peak at start, linear decay to 1.0) ---
-        this.tempScaleEffect = map(t, 0, 1, 1.03, 1.0); // Start at 103%, end at 100%
-
-      } else {
-        // --- Animation Finished ---
-        this.isPlacing = false; // Stop the animation state
-        // Ensure final state is perfectly set
-        this.x = this.animTargetX;
-        this.y = this.animTargetY;
-        this.tempScaleEffect = 1.0; // Ensure final scale is exactly 1
-      }
+        // Only animate if we haven't exceeded the duration
+        if (elapsed <= duration) {
+            // Map the elapsed time to a value between 0 and 1 for animation progress
+            let t = map(elapsed, 0, duration, 0, 1);
+            
+            // Apply quadratic ease-out effect (starts fast, slows down)
+            // This creates a smooth deceleration effect
+            let easedT = 1 - pow(1 - t, 2);
+            
+            // Add a subtle bounce effect using sine wave
+            // Multiplies by 0.1 to keep the bounce subtle (10% of the scale)
+            let bounceT = sin(easedT * PI * 2) * 0.1;
+            
+            // Calculate final scale effect:
+            // 1. Start at base scale (1)
+            // 2. Add 5% growth during the ease-out (easedT * 0.05)
+            // 3. Add the bounce effect
+            let pulseScale = 1 + easedT * 0.05 + bounceT;
+            
+            // Apply the calculated scale effect
+            this.tempScaleEffect = pulseScale;
+        } else {
+            // Animation is complete
+            this.isPlacing = false; // Stop the landing animation
+            this.tempScaleEffect = 1; // Reset scale to normal
+        }
     } else if (!this.isPlacing && this.tempScaleEffect !== 1) {
-      // If no longer placing, ensure scale effect is reset
-      this.tempScaleEffect = 1;
+         // If the shape is no longer being placed but still has a scale effect,
+         // immediately reset the scale to normal
+         this.tempScaleEffect = 1;
     }
-    // Note: If you wanted the item to VISUALLY zip from actual mouse pos to target,
-    // you would need to store actual mouseX/Y in mouseReleased into animStartX/Y,
-    // and then use:
-    // this.x = lerp(this.animStartX, this.animTargetX, easedT);
-    // this.y = lerp(this.animStartY, this.animTargetY, easedT);
-    // in the interpolation section above. Let's keep it simple first.
   }
 
    // Display method draws the shape onto a graphics context (main canvas or canvasPG)
