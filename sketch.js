@@ -461,13 +461,13 @@ class FloatingShape {
             
             // Add a subtle bounce effect using sine wave
             // Multiplies by 0.1 to keep the bounce subtle (10% of the scale)
-            let bounceT = sin(easedT * PI * 2) * 0.1;
+            let bounceT = sin(easedT * PI * 2) * 0.02;
             
             // Calculate final scale effect:
             // 1. Start at base scale (1)
             // 2. Add 5% growth during the ease-out (easedT * 0.05)
             // 3. Add the bounce effect
-            let pulseScale = 1 + easedT * 0.05 + bounceT;
+            let pulseScale = 1 + easedT * 0.02 + bounceT;
             
             // Apply the calculated scale effect
             this.tempScaleEffect = pulseScale;
