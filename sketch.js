@@ -446,11 +446,13 @@ class FloatingShape {
   updateLanding() {
     if(this.isPlacing && !this.isGrabbed) {
         let elapsed = frameCount - this.landFrame;
-        let duration = 45; // Duration of the landing animation in frames
+        let duration = 25; // Reduced from 45 to 25 frames for quicker animation
         if (elapsed <= duration) {
             let t = map(elapsed, 0, duration, 0, 1);
-            let easedT = t * t * (3 - 2 * t); // Smoothstep easing
-            let pulseScale = 1 + easedT * 0.07; // Scale up by 7% and back
+            // Use a combination of ease-out and bounce effect
+            let easedT = 1 - pow(1 - t, 2); // Quadratic ease-out
+            let bounceT = sin(easedT * PI * 2) * 0.1; // Subtle bounce
+            let pulseScale = 1 + easedT * 0.05 + bounceT; // Reduced base scale (5%) plus bounce
             this.tempScaleEffect = pulseScale;
         } else {
             // Animation finished
@@ -1062,10 +1064,15 @@ function mousePressed() {
                (clearButton && event.target === clearButton.elt) ||
                (refreshButton && event.target === refreshButton.elt)) {
                 clickedOnHeaderDOM = true;
+                // Add this: Focus canvas after button click
+                if (canvas && canvas.elt && typeof canvas.elt.focus === 'function') {
+                    setTimeout(() => canvas.elt.focus(), 0);
+                }
             }
         }
         return clickedOnHeaderDOM; // Allow default if on a UI element, else consume
-     }
+        return clickedOnHeaderDOM; // Allow default if on a UI element, else consume blah blah blah
+    }
  
      if (grabbedItem) {
         if (grabbedItem.isMouseOver(mouseX, mouseY)) {
@@ -1388,31 +1395,31 @@ function keyPressed(event) {
     // If no item is grabbed and the key wasn't handled above, allow default.
     return true;
 }
-                        inputElement.value(grabbedItem.content); // Keep input field synced
-                    }
-                    return false; // Consume the event
-                }
-                // Check for printable characters (key.length === 1 is a good heuristic)
-                // This includes letters, numbers, symbols (like `+`, `-`, `=`, etc.), and space.
-                else if (key.length === 1) {
-                    grabbedItem.content += key;
-                    inputElement.value(grabbedItem.content); // Keep input field synced
-                    return false; // Consume the event
-                }
-                // For other non-Ctrl, non-Delete, non-Backspace, non-printable keys (e.g., Arrows, Enter, Shift alone)
-                // when a text item is grabbed, consume them to prevent default browser actions like scrolling.
-                return false;
-            }
 
-            // If it's a SHAPE (not text) and a key is pressed (not Ctrl, not Delete),
-            // consume it to prevent unexpected behavior or browser defaults.
-            return false;
-        }
+// Creates a new text shape from the input field content and adds it to floating shapes
+function addNewTextShapeFromInput() {
+    let currentText = inputElement.value();
+    // Validate input text
+    if (!currentText || currentText.trim() === "" || currentText.trim() === TEXT_OPTIONS[0].trim()) {
+         // Flash border red to indicate invalid input
+         inputElement.style("border-color", "red");
+         setTimeout(() => inputElement.style("border-color", "#ccc"), 500);
+         inputElement.value(''); // Clear input
+         inputElement.attribute('placeholder', TEXT_OPTIONS[0]); // Restore placeholder
+         inputElement.elt.focus(); // Keep focus on input
+         return; // Stop here if input is invalid
     }
-    // --- END OF MODIFIED SECTION ---
 
-    return true; // Allow default browser behavior if no item is grabbed and input not focused
-} 1.2); // Slightly wider size range
+    let newTextShape = new FloatingShape();
+
+    // Override properties set by reset() for a text shape created from input
+    newTextShape.type = 'text';
+    newTextShape.content = currentText.trim();
+    newTextShape.shapeType = 'none'; // No polygon shape for text
+
+    // Assign size and scale based on a category (e.g., medium)
+    let category = sizeCategories.find(cat => cat.name === 'medium') || { sizeRange: [100, 200], scaleRange: [1.0, 1.5], textScaleAdjust: 0.2 };
+    newTextShape.size = random(category.sizeRange[0] * 0.8, category.sizeRange[1] * 1.2); // Slightly wider size range
     newTextShape.scaleFactor = 1.0; // Start with scale 1
     newTextShape.textScaleAdjust = category.textScaleAdjust;
 
@@ -1761,7 +1768,6 @@ function restartAll() {
 let touchGrabbed = false; // Is a touch currently being used to drag an item?
 
 function touchStarted(event) {
-    // Ignore ifunction touchStarted(event) {
     if (touches.length === 0) return true;
     let touchX = touches[0].x;
     let touchY = touches[0].y;
@@ -1868,7 +1874,10 @@ function touchStarted(event) {
     }
     if (event.cancelable) event.preventDefault(); // Prevent general page scroll/zoom if touch unhandled
     return false; // Consume unhandled touches outside header UI.
-} if no touches or if not currently dragging an item by touch
+}
+
+function touchMoved(event) {
+    // Ignore if no touches or if not currently dragging an item by touch
     if (touches.length === 0 || !grabbedItem || !touchGrabbed) return true;
 
     // Get the position of the first touch
