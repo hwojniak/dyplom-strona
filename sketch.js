@@ -1,511 +1,11 @@
-// Interactive canvas website-tool project using p5.js
-
-let shapes = []; // Shapes currently floating or grabbed (Includes temporarily grabbed placed items)
-let placedItems = []; // Items placed and solidified on the central canvas
-let grabbedItem = null; // The shape currently being dragged
-
-// UI Element References (DOM elements need global vars if you create them this way)
-let inputElement;
-let savePNGButton;         // Existing button for standard PNG save
-let saveHighResPNGButton;  // NEW button for high-resolution PNG save
-let refreshButton;
-let clearButton;
-
-// Layout constants
-const HEADER_HEIGHT = 80;
-const CANVAS_AREA_W_BASE = 500; // Fixed width base for ratio (Source for high-res scaling)
-let CANVAS_AREA_W; // Actual width calculated in setup/resize
-let CANVAS_AREA_H; // Calculated in setup based on ratio
-let CANVAS_AREA_X; // Calculated in setup based on window width
-let CANVAS_AREA_Y; // Calculated in setup
-
-// Appearance constants
-const PALETTE = [
-  '#0000FE', // Blue
-  '#FFDD00', // Yellow
-  '#E70012', // Red
-  '#FE4DD3', // Pink
-  '#41AD4A', // Green
-  '#000000', // Black
-  '#222222', // Grey
-  '#FFFFFF', // White
-  '#FFA500', // Orange
-];
-
-const TEXT_OPTIONS = [
-  "TYPE SOMETHING...", // Placeholder/default
-  "I LOVE MOM",
-  "MUZYKA MNIE DOTYKA",
-  "SOMETHING something 123",
-  "Hi, I'm...",
-  "TOOL",
-  "ART PIECE",
-  "WORK WORK WORK"
-];
-
-let baseFont = 'monospace'; // Default fallback font (CSS string)
-
-// --- START: Variables for ALL Loaded Fonts ---
-let fontBangersRegular;
-let fontBoogalooRegular;
-let fontBreeSerifRegular;
-let fontCaveatBrushRegular;
-let fontCherryBombOneRegular;
-let fontCinzelDecorativeBlack;
-let fontCinzelDecorativeBold;
-let fontCinzelDecorativeRegular;
-let fontDynaPuffBold;
-let fontDynaPuffMedium;
-let fontDynaPuffRegular;
-let fontInterBold;
-let fontInterRegular;
-let fontPixelifySansRegular;
-let fontSenBold;
-let fontSenMedium;
-let fontSenRegular;
-let fontShareTechMonoRegular;
-let fontVT323Regular;
-
-// List to hold successfully loaded p5.Font objects - POPULATED IN CALLBACKS
-let loadedFontsList = [];
-// --- END: Variables for ALL Loaded Fonts ---
-
-let logoImage;        // Variable to hold the loaded SVG logo
-
-
-let SNAP_INCREMENT_RADIANS;
-
-// Define size categories for shapes
-const sizeCategories = [
-  { name: 'small', sizeRange: [50, 80], scaleRange: [0.8, 1.2], textScaleAdjust: 0.15 },
-  { name: 'medium', sizeRange: [80, 150], scaleRange: [1.0, 1.8], textScaleAdjust: 0.2 },
-  { name: 'large', sizeRange: [150, 250], scaleRange: [1.2, 2.5], textScaleAdjust: 0.25 }
-];
-
-// Small tolerance for click detection near shape edges in screen pixels
-const CLICK_TOLERANCE = 5; // Pixels
-
-
-// --- Utility functions for precise mouse collision and text bounds ---
-
-// Transforms global coordinates to an object's local, unscaled, unrotated coordinates.
-function transformPointToLocal(gx, gy, objX, objY, objRotation, objScale) {
-  // Add check for zero scale to prevent division by zero or infinity
-  if (objScale === 0) {
-      return { x: NaN, y: NaN }; // Indicate invalid transformation
-  }
-  let tx = gx - objX;
-  let ty = gy - objY;
-  let cosAngle = cos(-objRotation); // Inverse rotation
-  let sinAngle = sin(-objRotation);
-  let rx = tx * cosAngle - ty * sinAngle;
-  let ry = tx * sinAngle + ty * cosAngle;
-  let localX = rx / objScale;
-  let localY = ry / objScale;
-  return { x: localX, y: localY };
-}
-
-// Checks if a point (px, py) is inside/near an axis-aligned rectangle (centered at 0,0) with tolerance.
-function isPointInAxisAlignedRect(px, py, w, h, tolerance = 0) {
-     if (isNaN(px) || isNaN(py) || isNaN(w) || isNaN(h) || w <= 0 || h <= 0) {
-         return false;
-    }
-    let halfW = w / 2;
-    let halfH = h / 2;
-    return px >= -halfW - tolerance && px <= halfW + tolerance && py >= -halfH - tolerance && py <= halfH + tolerance;
-}
-
-// Calculates the shortest distance from a point (px, py) to a line segment from (x1, y1) to (x2, y2).
-// Used for checking proximity to polygon edges in local coordinates.
-function distToSegment(px, py, x1, y1, x2, y2) {
-    if (isNaN(px) || isNaN(py) || isNaN(x1) || isNaN(y1) || isNaN(x2) || isNaN(y2)) {
-         return Infinity; // Indicate unable to calculate distance
-    }
-  let l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
-  if (l2 === 0) return dist(px, py, x1, y1);
-
-  let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2; // Corrected dot product calculation
-  t = max(0, min(1, t));
-
-  let closestX = x1 + t * (x2 - x1);
-  let closestY = y1 + t * (y2 - y1);
-
-  return dist(px, py, closestX, closestY);
-}
-
-// Gets local vertices for unrotated polygon shapes centered at (0,0).
-function getTriangleVertices(size) {
-     if (isNaN(size) || size <= 0) return [];
-    // For equilateral triangle, we'll use size as the height
-    // The height of an equilateral triangle is (√3/2) * side_length
-    // So side_length = (2/√3) * height
-    const height = size;
-    const sideLength = (2/Math.sqrt(3)) * height;
-    // Calculate vertices for equilateral triangle
-    return [
-        { x: 0, y: -height/2 },  // Top vertex
-        { x: -sideLength/2, y: height/2 },  // Bottom left
-        { x: sideLength/2, y: height/2 }   // Bottom right
-    ];
-}
-
-function getSquareVertices(size) {
-     if (isNaN(size) || size <= 0) return [];
-    let halfSize = size / 2;
-    return [{ x: -halfSize, y: -halfSize }, { x: halfSize, y: -halfSize }, { x: halfSize, y: halfSize }, { x: -halfSize, y: halfSize }];
-}
-
-function getPentagonVertices(size) {
-     if (isNaN(size) || size <= 0) return [];
-    let sides = 5;
-    let radius = size * 0.7; // Matching drawShapePrimitive
-     if (isNaN(radius) || radius <= 0) return [];
-    let vertices = [];
-    for (let i = 0; i < sides; i++) {
-        let angle = TWO_PI / sides * i;
-        let sx = cos(angle - HALF_PI) * radius;
-        let sy = sin(angle - HALF_PI) * radius;
-        vertices.push({ x: sx, y: sy });
-    }
-    return vertices;
-}
-
-function getHexagonVertices(size) {
-     if (isNaN(size) || size <= 0) return [];
-     let sides = 6;
-     let radius = size; // Matching drawShapePrimitive
-     if (isNaN(radius) || radius <= 0) return [];
-     let vertices = [];
-     for (let i = 0; i < sides; i++) {
-         let angle = TWO_PI / sides * i;
-         let sx = cos(angle) * radius;
-         let sy = sin(angle) * radius;
-         vertices.push({ x: sx, y: sy });
-     }
-     return vertices;
-}
-
-
-// Checks if a point is strictly inside a convex polygon (local coords).
-function isPointInConvexPolygon(px, py, vertices) {
-    if (isNaN(px) || isNaN(py) || !Array.isArray(vertices) || vertices.length < 3) return false;
-  let numVertices = vertices.length;
-  let has_pos = false, has_neg = false;
-
-  let cross_product;
-
-  for (let i = 0; i < numVertices; i++) {
-    let v1 = vertices[i], v2 = vertices[(i + 1) % numVertices];
-     if (isNaN(v1.x) || isNaN(v1.y) || isNaN(v2.x) || isNaN(v2.y)) {
-         return false; // Invalid vertex data
-     }
-    // Check if point is on the line (cross product is zero)
-    cross_product = (v2.x - v1.x) * (py - v1.y) - (v2.y - v1.y) * (px - v1.x);
-
-    // Use a small epsilon for floating point comparisons
-    const epsilon = 1e-6;
-    if (cross_product > epsilon) has_pos = true;
-    if (cross_product < -epsilon) has_neg = true;
-
-    // If signs differ, point is outside (or on an edge, handled by isPointNearPolygonEdge)
-    if (has_pos && has_neg) return false;
-  }
-
-   // If we got here, all cross products have the same sign (or are zero).
-   // This means the point is inside or on an edge.
-   return true;
-}
-
-
-// Checks if a point is near any edge of a polygon within a tolerance (local coords).
-function isPointNearPolygonEdge(px, py, vertices, tolerance) {
-     if (isNaN(px) || isNaN(py) || !Array.isArray(vertices) || vertices.length < 2 || isNaN(tolerance) || tolerance < 0) {
-          return false;
-     }
-     for (let i = 0; i < vertices.length; i++) {
-         let v1 = vertices[i], v2 = vertices[(i + 1) % vertices.length];
-         if (isNaN(v1.x) || isNaN(v1.y) || isNaN(v2.x) || isNaN(v2.y)) continue;
-
-         if (distToSegment(px, py, v1.x, v1.y, v2.x, v2.y) <= tolerance) { return true; }
-     }
-    return false;
-}
-
-// Calculates text bounding box using a *single, persistent* graphics buffer.
-let textMeasurePG; // Declare the global variable here
-
-function getTextBounds(content, effectiveTextSize, fontRef) { // Renamed baseFontRef to fontRef for clarity
-     if (typeof content !== 'string' || isNaN(effectiveTextSize) || effectiveTextSize <= 0) {
-          return { w: 0, h: 0 }; // Return zero bounds for invalid input
-     }
-
-    // Ensure the measurement buffer exists and is configured
-    if (!textMeasurePG) {
-         // Fallback estimate if measurement buffer is not available
-        return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
-    }
-
-    try {
-        // Apply font properties to the measurement buffer context
-        // Use the font reference provided, or a default if none/invalid
-        // Check if fontRef is a truthy font object (and not the fallback string)
-        if (fontRef && fontRef !== baseFont) {
-             if (typeof textMeasurePG.textFont === 'function') textMeasurePG.textFont(fontRef);
-        } else {
-             // Fallback to baseFont string
-             if (typeof textMeasurePG.textFont === 'function') textMeasurePG.textFont(baseFont);
-        }
-
-
-        if (textMeasurePG.textSize) textMeasurePG.textSize(effectiveTextSize); else return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
-        if (textMeasurePG.textAlign) textMeasurePG.textAlign(CENTER, CENTER); else return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
-
-        // Perform measurement using the persistent buffer
-        let textW = 0, textAsc = 0, textDesc = 0;
-
-        if (textMeasurePG.textWidth) textW = textMeasurePG.textWidth(content); else return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
-         if (textMeasurePG.textAscent) textAsc = textMeasurePG.textAscent(); else return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
-         if (textMeasurePG.textDescent) textDesc = textMeasurePG.textDescent(); else return { w: effectiveTextSize * (content ? content.length : 1) * 0.6, h: effectiveTextSize * 1.2 };
-
-        let textH = textAsc + textDesc; // Total height
-
-        // Basic sanity check for calculated dimensions
-         if (isNaN(textW) || isNaN(textH) || textW < 0 || textH < 0) {
-              textW = effectiveTextSize * (content ? content.length : 0.5) * 0.6;
-              textH = effectiveTextSize * 1.2;
-         }
-
-        return { w: textW, h: textH };
-
-    } catch (e) {
-        // Fallback estimate on error
-        console.error("Error in getTextBounds:", e);
-        return { w: effectiveTextSize * (content ? content.length : 0.5) * 0.6, h: effectiveTextSize * 1.2 };
-    }
-}
-
-
-// --- FloatingShape Class ---
-class FloatingShape {
-  constructor() {
-    this.reset(); // Set initial properties via reset
-    // isGrabbed, isPlacing, etc. are set in reset
-  }
-
-  reset() {
-    // Randomly pick one of the 4 window edges for spawning off-screen
-    let edge = floor(random(4));
-    // Spawn point along that edge (use more of the edge length)
-    let posAlong = random(0.1, 0.9);
-
-    let categoryIndex = floor(random(sizeCategories.length));
-    let category = sizeCategories[categoryIndex];
-    this.size = random(category.sizeRange[0], category.sizeRange[1]);
-    this.scaleFactor = random(category.scaleRange[0], category.scaleRange[1]);
-
-     let roughMaxDimension = this.calculateMaxEffectiveDimension();
-      let offScreenOffset = max(roughMaxDimension / 2 * this.scaleFactor, 100) + 50; // Ensure it spawns well off-screen
-
-    let minSpeed = 1, maxSpeed = 2;
-
-    switch (edge) {
-      case 0: // Top
-        this.x = width * posAlong;
-        this.y = -offScreenOffset;
-        this.speedX = random(-1, 1) * maxSpeed * 0.5;
-        this.speedY = random(minSpeed, maxSpeed);
-        break;
-      case 1: // Right
-        this.x = width + offScreenOffset;
-        this.y = height * posAlong;
-        this.speedX = random(-maxSpeed, -minSpeed);
-        this.speedY = random(-1, 1) * maxSpeed * 0.5;
-        break;
-      case 2: // Bottom
-        this.x = width * posAlong;
-        this.y = height + offScreenOffset;
-        this.speedX = random(-1, 1) * maxSpeed * 0.5; // Allow movement in both directions
-        this.speedY = random(-maxSpeed, -minSpeed);
-        break;
-      case 3: // Left
-        this.x = -offScreenOffset;
-        this.y = height * posAlong;
-        this.speedX = random(minSpeed, maxSpeed);
-        this.speedY = random(-1, 1) * maxSpeed * 0.5;
-        break;
-    }
-
-    this.rotation = random(TWO_PI);
-    this.rotationSpeed = random(-0.002, 0.002);
-
-    let pickedColor;
-    this.type = random() < 0.7 ? 'shape' : 'text'; // 70% chance of being a shape
-
-    if (this.type === 'text') {
-         let attempts = 0;
-          do {
-             pickedColor = color(random(PALETTE));
-             attempts++;
-             // Avoid very light colors for text on black background
-         } while (attempts < 10 && brightness(pickedColor) > 230);
-
-         this.shapeType = 'none'; // Text shapes don't have a polygon/circle shape
-         let initialContent = random(TEXT_OPTIONS.slice(1)); // Pick from actual options, not placeholder
-         // Ensure content is not empty or just the placeholder
-         while(!initialContent || initialContent.trim() === "" || initialContent.trim() === TEXT_OPTIONS[0].trim()){
-            initialContent = random(TEXT_OPTIONS.slice(1));
-         }
-         this.content = initialContent.trim();
-         this.textScaleAdjust = category.textScaleAdjust;
-
-         // Assign a random loaded font
-         if (loadedFontsList.length > 0) {
-             this.font = random(loadedFontsList); // Pick a random p5.Font object
-             // console.log(`RESET: Assigned font:`, this.font ? this.font.font.names.postscriptName : 'Fallback'); // Debug font name
-         } else {
-             this.font = baseFont; // Fallback to the string 'monospace'
-             // console.log(`RESET: Using fallback font:`, this.font); // Debug fallback
-         }
-
-
-    } else { // type is 'shape'
-        this.shapeType = random(['triangle', 'square', 'pentagon', 'hexagon', 'circle']);
-        pickedColor = color(random(PALETTE));
-        this.content = null; // Shapes don't have text content
-        this.textScaleAdjust = 0; // Not applicable to shapes
-        this.font = null; // Shapes don't have a font
-    }
-
-    this.color = pickedColor;
-
-
-    this.isGrabbed = false;
-    this.isPlacing = false;
-    this.landFrame = -1;
-    this.tempScaleEffect = 1;
-  }
-
-   calculateMaxEffectiveDimension() {
-        let dimension = this.size || 50; // Default size if size is invalid
-        if (this.type === 'text' && this.content && this.content.trim() !== "" && this.content.trim() !== TEXT_OPTIONS[0].trim()) {
-             let effectiveTextSize = (this.size || 1) * (this.textScaleAdjust || 0.2);
-              // Pass the specific font to getTextBounds
-              let textBounds = getTextBounds(this.content, effectiveTextSize, this.font || baseFont);
-              dimension = sqrt(sq(textBounds.w) + sq(textBounds.h)); // Use diagonal as rough max dimension
-
-        } else if (this.type === 'shape' && this.shapeType) {
-             // Estimate max dimension based on shape type and size
-             switch(this.shapeType) {
-                  case 'circle': dimension = this.size * 2; break; // Diameter
-                  case 'square': dimension = this.size * Math.SQRT2; break; // Diagonal
-                  case 'triangle': dimension = this.size * 1.6; break; // Estimate based on height/width
-                  case 'pentagon': dimension = this.size * 0.7 * 2; break; // Diameter of circumcircle
-                  case 'hexagon': dimension = this.size * 2; break; // Diameter of circumcircle
-                  default: dimension = this.size * 2; break; // Default to diameter estimate
-             }
-             // Ensure a minimum size even if calculations fail
-             dimension = max(dimension, this.size * 1.5); // Ensure it's at least 1.5x base size
-        } else {
-            // Fallback if type is unknown or size is invalid
-            dimension = this.size || 100;
-        }
-
-        dimension = max(dimension, 1); // Ensure dimension is positive
-
-        return dimension;
-  }
-
-
-  update() {
-     if (!this.isGrabbed && !this.isPlacing) {
-         this.x += this.speedX;
-         this.y += this.speedY;
-
-         this.rotation += this.rotationSpeed;
-
-         // Keep rotation within [0, TWO_PI)
-         this.rotation = (this.rotation % TWO_PI + TWO_PI) % TWO_PI;
-     }
-  }
-
-   isReallyOffScreen() {
-        let maxEffectiveDimension = this.calculateMaxEffectiveDimension();
-        if (isNaN(maxEffectiveDimension) || maxEffectiveDimension <= 0) {
-             // If dimension calculation failed, use a large buffer to prevent premature removal
-             return this.x < -width || this.x > width * 2 || this.y < -height || this.y > height * 2;
-        }
-      let effectiveRadius = maxEffectiveDimension / 2 * this.scaleFactor;
-      // Use a buffer around the window edges
-      let windowBuffer = max(width, height) * 0.5; // Buffer is 50% of the larger window dimension
-
-      return this.x < -windowBuffer - effectiveRadius || this.x > width + windowBuffer + effectiveRadius ||
-             this.y < -windowBuffer - effectiveRadius || this.y > height + windowBuffer + effectiveRadius;
-  }
-
-
-  updateLanding() {
-    if(this.isPlacing && !this.isGrabbed) {
-        let elapsed = frameCount - this.landFrame;
-        let duration = 25; // Reduced from 45 to 25 frames for quicker animation
-        if (elapsed <= duration) {
-            let t = map(elapsed, 0, duration, 0, 1);
-            // Use a combination of ease-out and bounce effect
-            let easedT = 1 - pow(1 - t, 2); // Quadratic ease-out
-            let bounceT = sin(easedT * PI * 2) * 0.1; // Subtle bounce
-            let pulseScale = 1 + easedT * 0.05 + bounceT; // Reduced base scale (5%) plus bounce
-            this.tempScaleEffect = pulseScale;
-        } else {
-            // Animation finished
-            this.isPlacing = false;
-            this.tempScaleEffect = 1;
-        }
-    } else if (!this.isPlacing && this.tempScaleEffect !== 1) {
-         // If no longer placing, reset scale effect immediately
-         this.tempScaleEffect = 1;
-    }
-  }
-
-   // Display method draws the shape onto a graphics context (main canvas or canvasPG)
-   display(graphics, showGrabEffect = false, offsetX = 0, offsetY = 0) {
-     // Basic checks for valid graphics context
-     if (!graphics || typeof graphics.push !== 'function' || typeof graphics.translate !== 'function' || typeof graphics.rotate !== 'function' || typeof graphics.scale !== 'function') {
-        return;
-    }
-
-    // Don't draw empty text shapes unless they are grabbed (so you can type in them)
-    if (this.type === 'text' && (!this.content || this.content.trim() === "" || this.content.trim() === TEXT_OPTIONS[0].trim())) {
-         if (!this.isGrabbed || graphics !== this) { // Only draw if grabbed AND drawing on the main canvas (this)
-             return;
-         }
-    }
-
-    graphics.push();
-    // Translate relative to the graphics context's origin, accounting for canvas area offset
-    graphics.translate(this.x - offsetX, this.y - offsetY);
-    graphics.rotate(this.rotation);
-
-    // Apply scale, including the temporary landing effect scale
-    let currentDisplayScale = this.scaleFactor * (!this.isGrabbed && this.isPlacing ? this.tempScaleEffect : 1);
-    graphics.scale(currentDisplayScale);
-
-     // Draw grab effect outline if requested and drawing on the main canvas
-     if (showGrabEffect && graphics === this) {
-         graphics.drawingContext.shadowBlur = 40;
-         graphics.drawingContext.shadowColor = 'rgba(255, 255, 255, 0.9)';
-         graphics.stroke(255, 255, 255, 200);
-         graphics.strokeWeight(3);
-         graphics.noFill();
-         // Draw the shape primitive for the outline
-         this.drawShapePrimitive(graphics, 0, 0, this.size, this.shapeType, this.type === 'text', this.textScaleAdjust);
-         graphics.drawingContext.shadowBlur = 0; // Reset shadow
-    }
-
-    // Draw the main fill of the shape/text
-    graphics.fill(this.color);
     graphics.noStroke();
-
-    // Draw the core shape geometry or text
     this.drawShapePrimitive(graphics, 0, 0, this.size, this.shapeType, this.type === 'text', this.textScaleAdjust);
+
+    // Reset glow if applied
+    if (appliedGlow) {
+        graphics.drawingContext.shadowBlur = 0;
+    }
+
     graphics.pop();
   }
 
@@ -1161,83 +661,79 @@ function mousePressed() {
 
 // Handles mouse release events
 function mouseReleased() {
-  if (grabbedItem) {
-    let wasTextItem = grabbedItem.type === 'text';
-    grabbedItem.isGrabbed = false; // Release the grab
+    if (grabbedItem) {
+        let wasTextItem = grabbedItem.type === 'text';
+        let releaseX = grabbedItem.x;
+        let releaseY = grabbedItem.y;
 
-    // Check if the item was released over the central canvas area
-    if (isMouseOverCanvasArea(grabbedItem.x, grabbedItem.y)) {
-      // Item was dropped onto the canvas area, solidify and place it
+        grabbedItem.isGrabbed = false;
 
-      // If it's a text item, update its content from the input field
-      if (wasTextItem) {
-           let content = inputElement.value().trim();
-           // If text is empty or placeholder, remove the item instead of placing
-           if(content === "" || content === TEXT_OPTIONS[0].trim()) {
-               // Remove from shapes array
-               shapes = shapes.filter(s => s !== grabbedItem);
-               grabbedItem = null; // Clear grabbed item reference
-                // Reset input field
-                inputElement.value('');
-                inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-                inputElement.elt.blur();
-               return; // Exit the function
-           } else {
-              grabbedItem.content = content; // Update content
-           }
-      }
+        if (isMouseOverCanvasArea(releaseX, releaseY)) {
+            // Magnetic snap setup
+            grabbedItem.animStartX = releaseX;
+            grabbedItem.animStartY = releaseY;
+            grabbedItem.animTargetX = releaseX;
+            grabbedItem.animTargetY = releaseY;
 
-      grabbedItem.solidify(); // Ensure it stops moving
+            // Handle text content validation
+            if (wasTextItem) {
+                let content = inputElement.value().trim();
+                if (content === "" || content === TEXT_OPTIONS[0].trim()) {
+                    shapes = shapes.filter(s => s !== grabbedItem);
+                    grabbedItem = null;
+                    inputElement.value('');
+                    inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+                    inputElement.elt.blur();
+                    return;
+                } else {
+                    grabbedItem.content = content;
+                }
+            }
 
-      // Snap rotation if SNAP_INCREMENT_RADIANS is set
-      if (SNAP_INCREMENT_RADIANS !== undefined && SNAP_INCREMENT_RADIANS > 0) {
-        grabbedItem.rotation = snapAngle(grabbedItem.rotation, SNAP_INCREMENT_RADIANS);
-      }
+            // Apply instant rotation snap if needed
+            if (SNAP_INCREMENT_RADIANS !== undefined && SNAP_INCREMENT_RADIANS > 0) {
+                grabbedItem.rotation = snapAngle(grabbedItem.rotation, SNAP_INCREMENT_RADIANS);
+            }
 
-      // Remove from shapes array (it's now placed)
-      shapes = shapes.filter(s => s !== grabbedItem);
-      // Add to placedItems array
-      placedItems.push(grabbedItem);
+            grabbedItem.solidify();
+            shapes = shapes.filter(s => s !== grabbedItem);
+            placedItems.push(grabbedItem);
 
-      // Start the landing animation
-      grabbedItem.isPlacing = true;
-      grabbedItem.landFrame = frameCount;
+            // Start the landing/snap animation
+            grabbedItem.isPlacing = true;
+            grabbedItem.landFrame = frameCount;
 
+        } else {
+            // Dropped outside canvas
+            if (wasTextItem) {
+                let content = inputElement.value().trim();
+                if (content === "" || content === TEXT_OPTIONS[0].trim()) {
+                    shapes = shapes.filter(s => s !== grabbedItem);
+                    grabbedItem = null;
+                    inputElement.value('');
+                    inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+                    inputElement.elt.blur();
+                    return;
+                } else {
+                    grabbedItem.content = content;
+                }
+            }
+            grabbedItem.speedX = random(-1.5, 1.5);
+            grabbedItem.speedY = random(-1.5, 1.5);
+            grabbedItem.rotationSpeed = random(-0.003, 0.003);
+            grabbedItem.isPlacing = false;
+            grabbedItem.tempScaleEffect = 1;
+        }
 
-    } else {
-         // Item was dropped outside the canvas area, let it float away
-
-         // If it's a text item, update its content from the input field
-         if (wasTextItem) {
-             let content = inputElement.value().trim();
-             // If text is empty or placeholder, remove the item
-             if (content === "" || content === TEXT_OPTIONS[0].trim()) {
-                  shapes = shapes.filter(s => s !== grabbedItem);
-                  grabbedItem = null;
-                   inputElement.value('');
-                   inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-                   inputElement.elt.blur();
-                 return;
-             } else {
-                  grabbedItem.content = content; // Update content
-             }
-         }
-
-          // Give it random speeds to float away
-          grabbedItem.speedX = random(-1.5, 1.5);
-          grabbedItem.speedY = random(-1.5, 1.5);
-          grabbedItem.rotationSpeed = random(-0.003, 0.003);
-          grabbedItem.isPlacing = false; // Ensure no landing animation outside canvas
+        if (grabbedItem !== null) {
+            grabbedItem = null;
+        }
+        inputElement.value('');
+        inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+        if (document.activeElement === inputElement.elt) {
+            inputElement.elt.blur();
+        }
     }
-
-    // Clear the grabbed item reference and reset input field after handling
-    if (grabbedItem !== null) { // Check if it wasn't removed (empty text dropped on canvas)
-         grabbedItem = null;
-         inputElement.value('');
-         inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-         inputElement.elt.blur();
-     }
-  }
 }
 
 // Handles double-click events
