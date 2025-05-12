@@ -708,7 +708,7 @@ function mousePressed() {
          text("COMPOSTER", logoX, logoCenterY); // Use "COMPOSTER" as fallback text
     }
     // --- END: Draw the Header Logo ---
-}
+
 
 // Handles mouse release events
 function mouseReleased() {
