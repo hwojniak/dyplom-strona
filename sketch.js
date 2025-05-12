@@ -1070,7 +1070,7 @@ function mousePressed() {
                 }
             }
         }
-        return clickedOnHeaderDOM; // Allow default if on a UI element, else consume
+        return clickedOnHeaderDOM; // Allow default if on a UI element, else consume blah blah blah
     }
  
      if (grabbedItem) {
