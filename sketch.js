@@ -40,7 +40,8 @@ const TEXT_OPTIONS = [
   "Hi, I'm...",
   "TOOL",
   "ART PIECE",
-  "WORK WORK WORK"
+  "WORK WORK WORK",
+  "ALA MA KOTA"
 ];
 
 let baseFont = 'monospace'; // Default fallback font (CSS string)
@@ -1628,7 +1629,7 @@ function saveCanvasAreaAsHighResPNG() {
 
         // Create the high-resolution graphics buffer
         highResPG = createGraphics(targetWidthPixels, targetHeightPixels);
-        highResPG.background(255); // White background
+        highResPG.background(0); // White background
 
         // Draw each placed item onto the high-resolution buffer
         for (let i = 0; i < placedItems.length; i++) {
