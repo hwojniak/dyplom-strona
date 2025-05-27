@@ -824,7 +824,7 @@ function draw() {
         initialPositioningDone = true;
     }
 
-  background(0); // Draw black background for the whole window
+  background(255); // Draw white background for the whole window
 
   // --- Update shapes ---
   for (let i = shapes.length - 1; i >= 0; i--) {
@@ -901,7 +901,7 @@ function draw() {
   }
 
   // --- DRAW HEADER / UI OVERLAY ---
-  fill(220);
+  fill(0); // Changed from 220 to 0 for black header
   noStroke();
   rect(0, 0, width, HEADER_HEIGHT);
 
@@ -923,7 +923,7 @@ function draw() {
 
     } else {
          // Draw fallback text if logo failed to load
-         fill(50);
+         fill(255); // Changed from 50 to 255 for white text on black header
          textSize(20);
          textAlign(LEFT, CENTER);
           // Use textFont directly in the main drawing context
