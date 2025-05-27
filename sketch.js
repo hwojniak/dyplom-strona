@@ -27,7 +27,6 @@ const PALETTE = [
   '#FE4DD3', // Pink
   '#41AD4A', // Green
   '#000000', // Black
-  '#222222', // Grey
   '#FFFFFF', // White
   '#FFA500', // Orange
 ];
@@ -1568,18 +1567,8 @@ function saveCanvasAreaAsPNG() {
     }
 
     // Create a temporary graphics buffer to draw the canvas area onto
-    // This allows adding a border without affecting the live canvasPG
     let saveBuffer = createGraphics(canvasPG.width, canvasPG.height);
     saveBuffer.image(canvasPG, 0, 0); // Copy the canvas area content
-
-    // Draw a border onto the save buffer
-    saveBuffer.push();
-    saveBuffer.stroke(0);
-    saveBuffer.strokeWeight(1);
-    saveBuffer.noFill();
-    // Draw rectangle slightly inset to keep border within bounds
-    saveBuffer.rect(0.5, 0.5, saveBuffer.width - 1, saveBuffer.height - 1);
-    saveBuffer.pop();
 
     // Save the temporary buffer
     saveCanvas(saveBuffer, 'myArtboard_stdres_' + generateTimestampString() + '.png');
@@ -1590,7 +1579,6 @@ function saveCanvasAreaAsPNG() {
 
 // Saves the central canvas area as a high-resolution PNG
 function saveCanvasAreaAsHighResPNG() {
-
      // Check if canvasPG is available and valid (needed for base dimensions)
      if (!canvasPG || canvasPG.width <= 0 || canvasPG.height <= 0) {
         alert("Error: Cannot save high-resolution PNG. Canvas area buffer is not available or invalid.");
@@ -1600,23 +1588,19 @@ function saveCanvasAreaAsHighResPNG() {
 
     // Define the base dimensions (from the fixed ratio source)
     const sourceWidthBase = CANVAS_AREA_W_BASE;
-    const sourceHeightBase = CANVAS_AREA_W_BASE * (5/4); // Assuming 4:5 ratio is based on this width
+    const sourceHeightBase = CANVAS_AREA_W_BASE * (5/4); // Using 4:5 ratio
 
-    // Define target print resolution and paper size (B2)
+    // Define target print resolution
     const TARGET_DPI = 300; // Dots per inch
-    const B2_WIDTH_INCHES = 500 / 25.4; // B2 width in mm converted to inches
-    const B2_HEIGHT_INCHES = 707 / 25.4; // B2 height in mm converted to inches
 
-    // Calculate target pixel dimensions based on DPI
-    const targetWidthPixels = round(B2_WIDTH_INCHES * TARGET_DPI);
-    const targetHeightPixels = round(B2_HEIGHT_INCHES * TARGET_DPI);
+    // Calculate target dimensions based on the 4:5 ratio
+    const targetWidthPixels = round(sourceWidthBase * TARGET_DPI / 25.4); // Convert mm to inches, then to pixels
+    const targetHeightPixels = round(targetWidthPixels * (5/4)); // Maintain 4:5 ratio
 
      // Calculate the scaling factor needed to map the source base width to the target pixel width
      const scaleFactor = targetWidthPixels / sourceWidthBase;
-     // Calculate the scaled height of the original 4:5 content within the target dimensions
+     // Calculate the scaled height of the original 4:5 content
      const scaledSourceHeight = sourceHeightBase * scaleFactor;
-     // Calculate vertical offset to center the 4:5 content vertically
-     const verticalOffset = (targetHeightPixels - scaledSourceHeight) / 2;
 
     let highResPG = null; // Variable for the high-resolution graphics buffer
      try {
@@ -1629,7 +1613,7 @@ function saveCanvasAreaAsHighResPNG() {
 
         // Create the high-resolution graphics buffer
         highResPG = createGraphics(targetWidthPixels, targetHeightPixels);
-        highResPG.background(0); // White background
+        highResPG.background(255); // White background
 
         // Draw each placed item onto the high-resolution buffer
         for (let i = 0; i < placedItems.length; i++) {
@@ -1645,12 +1629,8 @@ function saveCanvasAreaAsHighResPNG() {
             highResPG.push(); // Save graphics state
 
              // Calculate item's position in the high-res buffer coordinates
-             // Item's position (item.x, item.y) is relative to the main window.
-             // Subtract CANVAS_AREA_X/Y to get position relative to the canvas area's top-left.
-             // Multiply by scaleFactor to get position in high-res pixels.
-             // Add verticalOffset to center the content vertically.
              let hrItemX = (item.x - CANVAS_AREA_X) * scaleFactor;
-             let hrItemY = (item.y - CANVAS_AREA_Y) * scaleFactor + verticalOffset;
+             let hrItemY = (item.y - CANVAS_AREA_Y) * scaleFactor;
 
              // Validate calculated position
              if (isNaN(hrItemX) || isNaN(hrItemY)) {
@@ -1684,31 +1664,10 @@ function saveCanvasAreaAsHighResPNG() {
                   if (typeof highResPG.textFont === 'function') highResPG.textFont(baseFont); // Fallback to string
              }
 
-
              item.drawShapePrimitive(highResPG, 0, 0, item.size, item.shapeType, item.type === 'text', itemTextScale);
 
             highResPG.pop(); // Restore graphics state
         }
-
-        // Draw a border around the scaled canvas area within the high-res buffer
-        highResPG.push();
-         highResPG.stroke(0); // Black border
-         // Scale the border weight based on the overall scale factor
-         let borderWeight = 1 * scaleFactor;
-         borderWeight = max(borderWeight, 0.5); // Ensure minimum border weight
-         highResPG.strokeWeight(borderWeight);
-         highResPG.noFill();
-         // Calculate border rectangle position and size in high-res pixels
-         let borderRectX = 0;
-         let borderRectY = verticalOffset;
-         let borderRectW = targetWidthPixels;
-         let borderRectH = scaledSourceHeight;
-
-         // Draw rectangle slightly inset to keep border within bounds
-         highResPG.rect(borderRectX + borderWeight / 2, borderRectY + borderWeight / 2,
-                        borderRectW - borderWeight, borderRectH - borderWeight);
-
-        highResPG.pop();
 
         // Save the high-resolution buffer as a PNG file
         if (targetWidthPixels > 0 && targetHeightPixels > 0) {
