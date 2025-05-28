@@ -32,7 +32,7 @@ const PALETTE = [
 ];
 
 const TEXT_OPTIONS = [
-  "TYPE SOMETHING...", // Placeholder/default
+  "TYPE SOMETHING AND PRESS ENTER...", // Placeholder/default
   "I LOVE MOM",
   "MUZYKA MNIE DOTYKA",
   "SOMETHING something 123",
@@ -907,7 +907,7 @@ function draw() {
     // --- START: Draw the Header Logo (SVG or Fallback Text) ---
     let logoX = 20;
     let logoCenterY = HEADER_HEIGHT / 2;
-    let logoTargetWidth = 150;
+    let logoTargetWidth = 300;  // Changed from 150 to 300
 
     // Check if logoImage is loaded and valid
     if (logoImage && typeof logoImage.width === 'number' && logoImage.width > 0) {
