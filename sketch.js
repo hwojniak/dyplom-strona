@@ -878,10 +878,17 @@ function draw() {
   }
 
   // Draw border around canvas area on the main canvas
-  stroke(200);
+  let gradient = drawingContext.createLinearGradient(
+    CANVAS_AREA_X, CANVAS_AREA_Y, 
+    CANVAS_AREA_X + CANVAS_AREA_W, CANVAS_AREA_Y
+  );
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 0)');  // White with 0% opacity
+  gradient.addColorStop(1, 'rgba(0, 0, 0, 0.75)');     // Black with 75% opacity
+  
+  drawingContext.strokeStyle = gradient;
   strokeWeight(1);
   noFill();
-   rect(CANVAS_AREA_X + 0.5, CANVAS_AREA_Y + 0.5, CANVAS_AREA_W - 1, CANVAS_AREA_H - 1);
+  rect(CANVAS_AREA_X + 0.5, CANVAS_AREA_Y + 0.5, CANVAS_AREA_W - 1, CANVAS_AREA_H - 1);
 
 
   // Draw grabbed item on top of everything else on the main canvas
