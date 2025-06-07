@@ -757,7 +757,7 @@ function setup() {
                .style("border", "1px solid #ccc")
                .style("border-radius", "15px")
                .style("outline", "none")
-               .style("background-color", color(253, 253, 253, 200))
+               .style("background-color", color(253, 253, 253, 196))
                .style("font-size", "14px")
                .style("color", color(50))
                 .style("box-sizing", "border-box"); // Include padding/border in element's total width/height
