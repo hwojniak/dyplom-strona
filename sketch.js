@@ -823,7 +823,7 @@ function draw() {
         initialPositioningDone = true;
     }
 
-  background(255); // Draw white background for the whole window
+  background(251, 251, 251); // Draw white background for the whole window
 
   // --- Update shapes ---
   for (let i = shapes.length - 1; i >= 0; i--) {
@@ -859,7 +859,7 @@ function draw() {
   // --- Central White Canvas Area Drawing (Rendered to canvasPG) ---
   if(canvasPG){
      canvasPG.clear(); // Clear the buffer
-     canvasPG.background(251, 251, 251); // Draw slightly grey background for the artboard
+     canvasPG.background(255); // Draw white background for the artboard
 
     // Draw placed items onto canvasPG
     for (let i = 0; i < placedItems.length; i++) {
