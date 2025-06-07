@@ -859,7 +859,7 @@ function draw() {
   // --- Central White Canvas Area Drawing (Rendered to canvasPG) ---
   if(canvasPG){
      canvasPG.clear(); // Clear the buffer
-     canvasPG.background(253); // Draw white background for the artboard
+     canvasPG.background(251, 251, 251); // Draw slightly grey background for the artboard
 
     // Draw placed items onto canvasPG
     for (let i = 0; i < placedItems.length; i++) {
