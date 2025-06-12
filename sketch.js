@@ -1157,8 +1157,7 @@ function mousePressed() {
 function mouseReleased() {
     if (grabbedItem) {
         let wasTextItem = grabbedItem.type === 'text';
-        grabbedItem.isGrabbed = false;
-
+        
         // If Alt was held during the drag, create a copy at the release position
         if (keyIsDown(ALT)) {
             // Create a copy of the grabbed item
@@ -1178,7 +1177,19 @@ function mouseReleased() {
             copy.y = grabbedItem.y;
             // Add the copy to shapes array
             shapes.push(copy);
+            
+            // Clear the grabbed state
+            grabbedItem.isGrabbed = false;
+            grabbedItem = null;
+            
+            // Reset input field
+            inputElement.value('');
+            inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+            inputElement.elt.blur();
+            return;
         }
+
+        grabbedItem.isGrabbed = false;
 
         // Check if the item was released over the central canvas area
         if (isMouseOverCanvasArea(grabbedItem.x, grabbedItem.y)) {
@@ -1229,6 +1240,12 @@ function mouseReleased() {
             grabbedItem.rotationSpeed = random(-0.003, 0.003);
             grabbedItem.isPlacing = false;
         }
+
+        // Clear the grabbed item reference and reset input field
+        grabbedItem = null;
+        inputElement.value('');
+        inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+        inputElement.elt.blur();
     }
 }
 
