@@ -824,132 +824,139 @@ function draw() {
         initialPositioningDone = true;
     }
 
-  background(251, 251, 251); // Draw white background for the whole window
+    background(251, 251, 251); // Draw white background for the whole window
 
-  // --- Update shapes ---
-  for (let i = shapes.length - 1; i >= 0; i--) {
-      let shape = shapes[i];
-     if (!shape.isGrabbed && !shape.isPlacing) { shape.update(); } // Update position/rotation if not grabbed/placing
-     shape.updateLanding(); // Update landing animation scale
-     // Remove shapes that are far off-screen and not grabbed/placing
-     if (!shape.isGrabbed && !shape.isPlacing && shape.isReallyOffScreen()) {
-          shapes.splice(i, 1);
-      }
-  }
-
-  // Add new shapes if the count drops below a threshold
-  // These new shapes will pick from the loadedFontsList which is now populated asynchronously
-  while (shapes.length < 20) { shapes.push(new FloatingShape()); }
-
-
-  // --- Update placed items ---
-  for (let item of placedItems) {
-      item.updateLanding(); // Update landing animation for placed items
-  }
-
-  // Draw the dragged copy if it exists
-  if (draggedCopy) {
-      draggedCopy.x = mouseX;
-      draggedCopy.y = mouseY;
-      draggedCopy.display(canvasPG, true);
-  }
-
-  // --- Draw floating shapes on main canvas (behind artboard) ---
-  // Draw shapes that are not currently grabbed
-  for (let i = 0; i < shapes.length; i++) {
-      let shape = shapes[i];
-      if (shape !== grabbedItem) {
-          shape.display(this, false, 0, 0); // Draw on main canvas (this), no grab effect, no offset
-      }
-  }
-
-
-  // --- Central White Canvas Area Drawing (Rendered to canvasPG) ---
-  if(canvasPG){
-     canvasPG.clear(); // Clear the buffer
-     canvasPG.background(255); // Draw white background for the artboard
-
-    // Draw placed items onto canvasPG
-    for (let i = 0; i < placedItems.length; i++) {
-        let item = placedItems[i];
-        // Draw on canvasPG, no grab effect, with offset (canvas area position relative to window)
-        item.display(canvasPG, false, CANVAS_AREA_X, CANVAS_AREA_Y);
+    // --- Update shapes ---
+    for (let i = shapes.length - 1; i >= 0; i--) {
+        let shape = shapes[i];
+        // Skip drawing the original item if we're dragging a copy
+        if (shape === grabbedItem && draggedCopy) {
+            continue;
+        }
+        if (!shape.isGrabbed && !shape.isPlacing) { shape.update(); } // Update position/rotation if not grabbed/placing
+        shape.updateLanding(); // Update landing animation scale
+        // Remove shapes that are far off-screen and not grabbed/placing
+        if (!shape.isGrabbed && !shape.isPlacing && shape.isReallyOffScreen()) {
+            shapes.splice(i, 1);
+        }
     }
 
-    // Draw the canvasPG buffer onto the main canvas at the calculated position
-    image(canvasPG, CANVAS_AREA_X, CANVAS_AREA_Y);
-  } else {
-       // Display error message if canvasPG is not available
-       fill(255, 100, 100, 100);
-       rect(CANVAS_AREA_X, CANVAS_AREA_Y, CANVAS_AREA_W, CANVAS_AREA_H);
-       fill(0); textAlign(CENTER, CENTER); text("Error: Canvas area buffer missing.", CANVAS_AREA_X + CANVAS_AREA_W/2, CANVAS_AREA_Y + CANVAS_AREA_H/2);
-  }
+    // Add new shapes if the count drops below a threshold
+    // These new shapes will pick from the loadedFontsList which is now populated asynchronously
+    while (shapes.length < 20) { shapes.push(new FloatingShape()); }
 
-  // Draw border around canvas area on the main canvas
-  let gradient = drawingContext.createLinearGradient(
-    CANVAS_AREA_X, CANVAS_AREA_Y, 
-    CANVAS_AREA_X + CANVAS_AREA_W, CANVAS_AREA_Y
-  );
-  gradient.addColorStop(0, 'rgba(255, 255, 255, 0)');  // White with 0% opacity
-  gradient.addColorStop(1, 'rgba(0, 0, 0, 0.75)');     // Black with 75% opacity
-  
-  drawingContext.strokeStyle = gradient;
-  strokeWeight(1);
-  noFill();
-  rect(CANVAS_AREA_X + 0.5, CANVAS_AREA_Y + 0.5, CANVAS_AREA_W - 1, CANVAS_AREA_H - 1);
+    // --- Update placed items ---
+    for (let item of placedItems) {
+        // Skip drawing the original item if we're dragging a copy
+        if (item === grabbedItem && draggedCopy) {
+            continue;
+        }
+        item.updateLanding(); // Update landing animation for placed items
+    }
+
+    // Draw the dragged copy if it exists
+    if (draggedCopy) {
+        draggedCopy.x = mouseX;
+        draggedCopy.y = mouseY;
+        draggedCopy.display(canvasPG, true);
+    }
+
+    // --- Draw floating shapes on main canvas (behind artboard) ---
+    // Draw shapes that are not currently grabbed
+    for (let i = 0; i < shapes.length; i++) {
+        let shape = shapes[i];
+        if (shape !== grabbedItem) {
+            shape.display(this, false, 0, 0); // Draw on main canvas (this), no grab effect, no offset
+        }
+    }
 
 
-  // Draw grabbed item on top of everything else on the main canvas
-  if (grabbedItem) {
-     // Smoothly move grabbed item towards mouse position
-     grabbedItem.x = lerp(grabbedItem.x, mouseX, 0.4);
-     grabbedItem.y = lerp(grabbedItem.y, mouseY, 0.4);
-     grabbedItem.solidify(); // Stop its own movement
-     grabbedItem.isPlacing = false; // Cancel landing animation if it was placing
-      // Update text content from input field if it's a text item
-      if (grabbedItem.type === 'text') {
-           grabbedItem.content = inputElement.value();
+    // --- Central White Canvas Area Drawing (Rendered to canvasPG) ---
+    if(canvasPG){
+       canvasPG.clear(); // Clear the buffer
+       canvasPG.background(255); // Draw white background for the artboard
+
+      // Draw placed items onto canvasPG
+      for (let i = 0; i < placedItems.length; i++) {
+          let item = placedItems[i];
+          // Draw on canvasPG, no grab effect, with offset (canvas area position relative to window)
+          item.display(canvasPG, false, CANVAS_AREA_X, CANVAS_AREA_Y);
       }
-     // Draw on main canvas (this), with grab effect, no offset
-     grabbedItem.display(this, true, 0, 0);
-  }
 
-  // --- DRAW HEADER / UI OVERLAY ---
-  fill(0); // Changed from 220 to 0 for black header
-  noStroke();
-  rect(0, 0, width, HEADER_HEIGHT);
-
-    // --- START: Draw the Header Logo (SVG or Fallback Text) ---
-    let logoX = 20;
-    let logoCenterY = HEADER_HEIGHT / 2;
-    let logoTargetWidth = 300;  // Changed from 150 to 300
-
-    // Check if logoImage is loaded and valid
-    if (logoImage && typeof logoImage.width === 'number' && logoImage.width > 0) {
-         let logoAspectRatio = logoImage.height / logoImage.width;
-         let logoTargetHeight = logoTargetWidth * logoAspectRatio;
-
-         let logoDrawX = logoX;
-         let logoDrawY = logoCenterY - logoTargetHeight / 2;
-
-         imageMode(CORNER); // Draw image from its top-left corner
-         image(logoImage, logoDrawX, logoDrawY, logoTargetWidth, logoTargetHeight);
-
+      // Draw the canvasPG buffer onto the main canvas at the calculated position
+      image(canvasPG, CANVAS_AREA_X, CANVAS_AREA_Y);
     } else {
-         // Draw fallback text if logo failed to load
-         fill(255); // Changed from 50 to 255 for white text on black header
-         textSize(20);
-         textAlign(LEFT, CENTER);
-          // Use textFont directly in the main drawing context
-          // Use Sen-Regular if loaded, otherwise fallback string
-          if (fontSenRegular && fontSenRegular !== baseFont) { // Check if it's a truthy font object
-              textFont(fontSenRegular);
-          } else {
-              textFont(baseFont); // Use monospace string
-          }
-         text("COMPOSTER", logoX, logoCenterY); // Use "COMPOSTER" as fallback text
+         // Display error message if canvasPG is not available
+         fill(255, 100, 100, 100);
+         rect(CANVAS_AREA_X, CANVAS_AREA_Y, CANVAS_AREA_W, CANVAS_AREA_H);
+         fill(0); textAlign(CENTER, CENTER); text("Error: Canvas area buffer missing.", CANVAS_AREA_X + CANVAS_AREA_W/2, CANVAS_AREA_Y + CANVAS_AREA_H/2);
     }
-    // --- END: Draw the Header Logo ---
+
+    // Draw border around canvas area on the main canvas
+    let gradient = drawingContext.createLinearGradient(
+      CANVAS_AREA_X, CANVAS_AREA_Y, 
+      CANVAS_AREA_X + CANVAS_AREA_W, CANVAS_AREA_Y
+    );
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 0)');  // White with 0% opacity
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.75)');     // Black with 75% opacity
+    
+    drawingContext.strokeStyle = gradient;
+    strokeWeight(1);
+    noFill();
+    rect(CANVAS_AREA_X + 0.5, CANVAS_AREA_Y + 0.5, CANVAS_AREA_W - 1, CANVAS_AREA_H - 1);
+
+
+    // Draw grabbed item on top of everything else on the main canvas
+    if (grabbedItem) {
+       // Smoothly move grabbed item towards mouse position
+       grabbedItem.x = lerp(grabbedItem.x, mouseX, 0.4);
+       grabbedItem.y = lerp(grabbedItem.y, mouseY, 0.4);
+       grabbedItem.solidify(); // Stop its own movement
+       grabbedItem.isPlacing = false; // Cancel landing animation if it was placing
+        // Update text content from input field if it's a text item
+        if (grabbedItem.type === 'text') {
+             grabbedItem.content = inputElement.value();
+        }
+       // Draw on main canvas (this), with grab effect, no offset
+       grabbedItem.display(this, true, 0, 0);
+    }
+
+    // --- DRAW HEADER / UI OVERLAY ---
+    fill(0); // Changed from 220 to 0 for black header
+    noStroke();
+    rect(0, 0, width, HEADER_HEIGHT);
+
+      // --- START: Draw the Header Logo (SVG or Fallback Text) ---
+      let logoX = 20;
+      let logoCenterY = HEADER_HEIGHT / 2;
+      let logoTargetWidth = 300;  // Changed from 150 to 300
+
+      // Check if logoImage is loaded and valid
+      if (logoImage && typeof logoImage.width === 'number' && logoImage.width > 0) {
+           let logoAspectRatio = logoImage.height / logoImage.width;
+           let logoTargetHeight = logoTargetWidth * logoAspectRatio;
+
+           let logoDrawX = logoX;
+           let logoDrawY = logoCenterY - logoTargetHeight / 2;
+
+           imageMode(CORNER); // Draw image from its top-left corner
+           image(logoImage, logoDrawX, logoDrawY, logoTargetWidth, logoTargetHeight);
+
+      } else {
+           // Draw fallback text if logo failed to load
+           fill(255); // Changed from 50 to 255 for white text on black header
+           textSize(20);
+           textAlign(LEFT, CENTER);
+            // Use textFont directly in the main drawing context
+            // Use Sen-Regular if loaded, otherwise fallback string
+            if (fontSenRegular && fontSenRegular !== baseFont) { // Check if it's a truthy font object
+                textFont(fontSenRegular);
+            } else {
+                textFont(baseFont); // Use monospace string
+            }
+           text("COMPOSTER", logoX, logoCenterY); // Use "COMPOSTER" as fallback text
+      }
+      // --- END: Draw the Header Logo ---
 }
 
 // Positions the central canvas area and UI elements based on window size
