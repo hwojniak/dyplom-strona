@@ -1096,174 +1096,140 @@ function mousePressed() {
             }
         }
         return clickedOnHeaderDOM; // Allow default if on a UI element, else consume
-        return clickedOnHeaderDOM; // Allow default if on a UI element, else consume blah blah blah
     }
- 
-     if (grabbedItem) {
-        if (grabbedItem.isMouseOver(mouseX, mouseY)) {
-             // Item already grabbed, click on it again.
-             // Try to focus canvas for keyboard control
-             // --- CORRECTED CHECK ---
-             if (canvas && canvas.elt && typeof canvas.elt.focus === 'function') {
-                canvas.elt.focus();
-             }
-             // --- END CORRECTED CHECK ---
-             return false;
-        } else {
-        // ...
-        }
-    }
- 
-    // Attempt to focus the canvas element whenever a mouse press occurs outside the header
-    // that might lead to an item grab. This prepares for keyboard interaction.
-   // Attempt to focus the canvas element whenever a mouse press occurs outside the header
-   // that might lead to an item grab. This prepares for keyboard interaction.
-   // --- CORRECTED CHECK ---
-   if (canvas && canvas.elt && typeof canvas.elt.focus === 'function') {
-    canvas.elt.focus();
-}
-// --- END CORRECTED CHECK ---
- 
-    // Check for clicks on placed items
-    if (isMouseOverCanvasArea(mouseX, mouseY)) {
-        for (let i = placedItems.length - 1; i >= 0; i--) {
-             if (placedItems[i].isMouseOver(mouseX, mouseY)) {
-                 grabbedItem = placedItems[i];
-                 grabbedItem.isGrabbed = true;
-                 grabbedItem.isPlacing = false;
-                 grabbedItem.solidify();
- 
-                 let temp = placedItems.splice(i, 1)[0];
-                 shapes.push(temp); // Move to shapes to be drawn on top
- 
-                 if (grabbedItem.type === 'text') {
-                     inputElement.value(grabbedItem.content || '');
-                     inputElement.attribute('placeholder', '');
-                     // DO NOT FOCUS inputElement.elt.focus();
-                 } else {
-                     inputElement.value('');
-                     inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-                     if (document.activeElement === inputElement.elt) inputElement.elt.blur();
-                 }
-                 // Canvas focus should already be attempted above.
-                 return false;
-            }
-        }
-    }
- 
-   // Check for clicks on floating shapes
-   for (let i = shapes.length - 1; i >= 0; i--) {
-       if (!shapes[i].isGrabbed) {
-           if (shapes[i].isMouseOver(mouseX, mouseY)) {
-               grabbedItem = shapes[i];
-               grabbedItem.isGrabbed = true;
-               grabbedItem.isPlacing = false;
-               grabbedItem.solidify();
- 
-               let temp = shapes.splice(i, 1)[0];
-               shapes.push(temp); // Move to end of shapes for draw order
- 
-               if (grabbedItem.type === 'text') {
-                  inputElement.value(grabbedItem.content || '');
-                  inputElement.attribute('placeholder', '');
-                  // DO NOT FOCUS inputElement.elt.focus();
-               } else {
-                  inputElement.value('');
-                  inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-                  if (document.activeElement === inputElement.elt) inputElement.elt.blur();
-               }
-               // Canvas focus should already be attempted above.
-               return false;
-           }
-       }
-   }
-    // If click was not on header UI, not on an item, and no item grabbed:
-    // Consider deselecting any focused input.
-    if (document.activeElement === inputElement.elt) {
-         inputElement.elt.blur();
-    }
-    return true; // Allow default if no interaction
- }
 
-// Handles mouse release events
-function mouseReleased() {
-  if (grabbedItem) {
-    let wasTextItem = grabbedItem.type === 'text';
-    grabbedItem.isGrabbed = false; // Release the grab
+    // Check for clicks on placed items first (they should be on top)
+    for (let i = placedItems.length - 1; i >= 0; i--) {
+        if (placedItems[i].isMouseOver(mouseX, mouseY)) {
+            grabbedItem = placedItems[i];
+            grabbedItem.isGrabbed = true;
+            grabbedItem.isPlacing = false;
+            grabbedItem.solidify();
 
-    // Check if the item was released over the central canvas area
-    if (isMouseOverCanvasArea(grabbedItem.x, grabbedItem.y)) {
-      // Item was dropped onto the canvas area, solidify and place it
+            // Move from placedItems to shapes array
+            let temp = placedItems.splice(i, 1)[0];
+            shapes.push(temp);
 
-      // If it's a text item, update its content from the input field
-      if (wasTextItem) {
-           let content = inputElement.value().trim();
-           // If text is empty or placeholder, remove the item instead of placing
-           if(content === "" || content === TEXT_OPTIONS[0].trim()) {
-               // Remove from shapes array
-               shapes = shapes.filter(s => s !== grabbedItem);
-               grabbedItem = null; // Clear grabbed item reference
-                // Reset input field
+            if (grabbedItem.type === 'text') {
+                inputElement.value(grabbedItem.content || '');
+                inputElement.attribute('placeholder', '');
+                inputElement.elt.focus();
+            } else {
                 inputElement.value('');
                 inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
                 inputElement.elt.blur();
-               return; // Exit the function
-           } else {
-              grabbedItem.content = content; // Update content
-           }
-      }
-
-      grabbedItem.solidify(); // Ensure it stops moving
-
-      // Snap rotation if SNAP_INCREMENT_RADIANS is set
-      if (SNAP_INCREMENT_RADIANS !== undefined && SNAP_INCREMENT_RADIANS > 0) {
-        grabbedItem.rotation = snapAngle(grabbedItem.rotation, SNAP_INCREMENT_RADIANS);
-      }
-
-      // Remove from shapes array (it's now placed)
-      shapes = shapes.filter(s => s !== grabbedItem);
-      // Add to placedItems array
-      placedItems.push(grabbedItem);
-
-      // Start the landing animation
-      grabbedItem.isPlacing = true;
-      grabbedItem.landFrame = frameCount;
-
-
-    } else {
-         // Item was dropped outside the canvas area, let it float away
-
-         // If it's a text item, update its content from the input field
-         if (wasTextItem) {
-             let content = inputElement.value().trim();
-             // If text is empty or placeholder, remove the item
-             if (content === "" || content === TEXT_OPTIONS[0].trim()) {
-                  shapes = shapes.filter(s => s !== grabbedItem);
-                  grabbedItem = null;
-                   inputElement.value('');
-                   inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-                   inputElement.elt.blur();
-                 return;
-             } else {
-                  grabbedItem.content = content; // Update content
-             }
-         }
-
-          // Give it random speeds to float away
-          grabbedItem.speedX = random(-1.5, 1.5);
-          grabbedItem.speedY = random(-1.5, 1.5);
-          grabbedItem.rotationSpeed = random(-0.003, 0.003);
-          grabbedItem.isPlacing = false; // Ensure no landing animation outside canvas
+            }
+            return false;
+        }
     }
 
-    // Clear the grabbed item reference and reset input field after handling
-    if (grabbedItem !== null) { // Check if it wasn't removed (empty text dropped on canvas)
-         grabbedItem = null;
-         inputElement.value('');
-         inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-         inputElement.elt.blur();
-     }
-  }
+    // Check for clicks on floating shapes
+    for (let i = shapes.length - 1; i >= 0; i--) {
+        if (!shapes[i].isGrabbed) {
+            if (shapes[i].isMouseOver(mouseX, mouseY)) {
+                grabbedItem = shapes[i];
+                grabbedItem.isGrabbed = true;
+                grabbedItem.isPlacing = false;
+                grabbedItem.solidify();
+
+                let temp = shapes.splice(i, 1)[0];
+                shapes.push(temp);
+
+                if (grabbedItem.type === 'text') {
+                    inputElement.value(grabbedItem.content || '');
+                    inputElement.attribute('placeholder', '');
+                    inputElement.elt.focus();
+                } else {
+                    inputElement.value('');
+                    inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+                    inputElement.elt.blur();
+                }
+                return false;
+            }
+        }
+    }
+
+    // If no item was clicked, allow default behavior
+    return true;
+}
+
+// Handles mouse release events
+function mouseReleased() {
+    if (grabbedItem) {
+        let wasTextItem = grabbedItem.type === 'text';
+        grabbedItem.isGrabbed = false;
+
+        // If Alt was held during the drag, create a copy at the release position
+        if (keyIsDown(ALT)) {
+            // Create a copy of the grabbed item
+            let copy = new FloatingShape();
+            // Copy all relevant properties
+            copy.type = grabbedItem.type;
+            copy.shapeType = grabbedItem.shapeType;
+            copy.size = grabbedItem.size;
+            copy.scaleFactor = grabbedItem.scaleFactor;
+            copy.rotation = grabbedItem.rotation;
+            copy.color = grabbedItem.color;
+            copy.content = grabbedItem.content;
+            copy.font = grabbedItem.font;
+            copy.textScaleAdjust = grabbedItem.textScaleAdjust;
+            // Position the copy at the release position
+            copy.x = grabbedItem.x;
+            copy.y = grabbedItem.y;
+            // Add the copy to shapes array
+            shapes.push(copy);
+        }
+
+        // Check if the item was released over the central canvas area
+        if (isMouseOverCanvasArea(grabbedItem.x, grabbedItem.y)) {
+            // Item was dropped onto the canvas area, solidify and place it
+            if (wasTextItem) {
+                let content = inputElement.value().trim();
+                if(content === "" || content === TEXT_OPTIONS[0].trim()) {
+                    shapes = shapes.filter(s => s !== grabbedItem);
+                    grabbedItem = null;
+                    inputElement.value('');
+                    inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+                    inputElement.elt.blur();
+                    return;
+                } else {
+                    grabbedItem.content = content;
+                }
+            }
+
+            grabbedItem.solidify();
+
+            if (SNAP_INCREMENT_RADIANS !== undefined && SNAP_INCREMENT_RADIANS > 0) {
+                grabbedItem.rotation = snapAngle(grabbedItem.rotation, SNAP_INCREMENT_RADIANS);
+            }
+
+            shapes = shapes.filter(s => s !== grabbedItem);
+            placedItems.push(grabbedItem);
+
+            grabbedItem.isPlacing = true;
+            grabbedItem.landFrame = frameCount;
+        } else {
+            // Item released outside canvas area - let it float away
+            if (wasTextItem) {
+                let content = inputElement.value().trim();
+                if (content === "" || content === TEXT_OPTIONS[0].trim()) {
+                    shapes = shapes.filter(s => s !== grabbedItem);
+                    grabbedItem = null;
+                    inputElement.value('');
+                    inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+                    inputElement.elt.blur();
+                    return;
+                } else {
+                    grabbedItem.content = content;
+                }
+            }
+
+            grabbedItem.speedX = random(-1.5, 1.5);
+            grabbedItem.speedY = random(-1.5, 1.5);
+            grabbedItem.rotationSpeed = random(-0.003, 0.003);
+            grabbedItem.isPlacing = false;
+        }
+    }
 }
 
 // Handles double-click events
