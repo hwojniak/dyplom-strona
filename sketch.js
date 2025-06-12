@@ -1098,35 +1098,56 @@ function mousePressed() {
         return clickedOnHeaderDOM; // Allow default if on a UI element, else consume
     }
 
-    // Check for clicks on placed items first (they should be on top)
-    for (let i = placedItems.length - 1; i >= 0; i--) {
-        if (placedItems[i].isMouseOver(mouseX, mouseY)) {
-            grabbedItem = placedItems[i];
-            grabbedItem.isGrabbed = true;
-            grabbedItem.isPlacing = false;
-            grabbedItem.solidify();
-
-            // Move from placedItems to shapes array
-            let temp = placedItems.splice(i, 1)[0];
-            shapes.push(temp);
-
-            if (grabbedItem.type === 'text') {
-                inputElement.value(grabbedItem.content || '');
-                inputElement.attribute('placeholder', '');
-                inputElement.elt.focus();
-            } else {
-                inputElement.value('');
-                inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-                inputElement.elt.blur();
+    // Store original position when starting to drag
+    if (keyIsDown(ALT)) {
+        for (let i = placedItems.length - 1; i >= 0; i--) {
+            if (placedItems[i].isMouseOver(mouseX, mouseY)) {
+                grabbedItem = placedItems[i];
+                grabbedItem.isGrabbed = true;
+                grabbedItem.isPlacing = false;
+                grabbedItem.originalX = grabbedItem.x;
+                grabbedItem.originalY = grabbedItem.y;
+                return false;
             }
-            return false;
         }
-    }
 
-    // Check for clicks on floating shapes
-    for (let i = shapes.length - 1; i >= 0; i--) {
-        if (!shapes[i].isGrabbed) {
-            if (shapes[i].isMouseOver(mouseX, mouseY)) {
+        for (let i = shapes.length - 1; i >= 0; i--) {
+            if (!shapes[i].isGrabbed && shapes[i].isMouseOver(mouseX, mouseY)) {
+                grabbedItem = shapes[i];
+                grabbedItem.isGrabbed = true;
+                grabbedItem.isPlacing = false;
+                grabbedItem.originalX = grabbedItem.x;
+                grabbedItem.originalY = grabbedItem.y;
+                return false;
+            }
+        }
+    } else {
+        // Normal grab behavior without Alt
+        for (let i = placedItems.length - 1; i >= 0; i--) {
+            if (placedItems[i].isMouseOver(mouseX, mouseY)) {
+                grabbedItem = placedItems[i];
+                grabbedItem.isGrabbed = true;
+                grabbedItem.isPlacing = false;
+                grabbedItem.solidify();
+
+                let temp = placedItems.splice(i, 1)[0];
+                shapes.push(temp);
+
+                if (grabbedItem.type === 'text') {
+                    inputElement.value(grabbedItem.content || '');
+                    inputElement.attribute('placeholder', '');
+                    inputElement.elt.focus();
+                } else {
+                    inputElement.value('');
+                    inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+                    inputElement.elt.blur();
+                }
+                return false;
+            }
+        }
+
+        for (let i = shapes.length - 1; i >= 0; i--) {
+            if (!shapes[i].isGrabbed && shapes[i].isMouseOver(mouseX, mouseY)) {
                 grabbedItem = shapes[i];
                 grabbedItem.isGrabbed = true;
                 grabbedItem.isPlacing = false;
@@ -1173,9 +1194,14 @@ function mouseReleased() {
             copy.content = grabbedItem.content;
             copy.font = grabbedItem.font;
             copy.textScaleAdjust = grabbedItem.textScaleAdjust;
+            
             // Position the copy at the release position
             copy.x = grabbedItem.x;
             copy.y = grabbedItem.y;
+            
+            // Return original item to its starting position
+            grabbedItem.x = grabbedItem.originalX;
+            grabbedItem.y = grabbedItem.originalY;
             
             // Handle the copy based on where it was released
             if (isMouseOverCanvasArea(copy.x, copy.y)) {
@@ -1211,7 +1237,7 @@ function mouseReleased() {
             inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
             inputElement.elt.blur();
             
-            // Clear grabbed state but don't null the reference yet
+            // Clear grabbed state
             grabbedItem.isGrabbed = false;
             grabbedItem = null;
             return;
