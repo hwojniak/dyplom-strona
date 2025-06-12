@@ -1177,29 +1177,47 @@ function mouseReleased() {
             copy.x = grabbedItem.x;
             copy.y = grabbedItem.y;
             
-            // If the original was a placed item, place the copy on the artboard too
-            if (wasPlacedItem) {
+            // Handle the copy based on where it was released
+            if (isMouseOverCanvasArea(copy.x, copy.y)) {
+                // Copy was released on the artboard
                 copy.solidify();
+                copy.isPlacing = true;
+                copy.landFrame = frameCount;
                 placedItems.push(copy);
             } else {
-                // If original was floating, make the copy float too
+                // Copy was released in the background
                 copy.speedX = random(-1.5, 1.5);
                 copy.speedY = random(-1.5, 1.5);
                 copy.rotationSpeed = random(-0.003, 0.003);
                 shapes.push(copy);
             }
             
-            // Clear the grabbed state
-            grabbedItem.isGrabbed = false;
-            grabbedItem = null;
+            // Handle the original item
+            if (wasPlacedItem) {
+                // If original was on artboard, keep it there
+                grabbedItem.isGrabbed = false;
+                grabbedItem.isPlacing = true;
+                grabbedItem.landFrame = frameCount;
+            } else {
+                // If original was floating, restore its movement
+                grabbedItem.isGrabbed = false;
+                grabbedItem.speedX = random(-1.5, 1.5);
+                grabbedItem.speedY = random(-1.5, 1.5);
+                grabbedItem.rotationSpeed = random(-0.003, 0.003);
+            }
             
             // Reset input field
             inputElement.value('');
             inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
             inputElement.elt.blur();
+            
+            // Clear grabbed state but don't null the reference yet
+            grabbedItem.isGrabbed = false;
+            grabbedItem = null;
             return;
         }
 
+        // Normal drag and drop behavior (no Alt key)
         grabbedItem.isGrabbed = false;
 
         // Check if the item was released over the central canvas area
