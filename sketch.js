@@ -1106,89 +1106,101 @@ function mousePressed() {
         return clickedOnHeaderDOM; // Allow default if on a UI element, else consume
     }
 
-    // Check for clicks on placed items first (they should be on top)
-    for (let i = placedItems.length - 1; i >= 0; i--) {
-        if (placedItems[i].isMouseOver(mouseX, mouseY)) {
-            grabbedItem = placedItems[i];
-            grabbedItem.isGrabbed = true;
-            grabbedItem.isPlacing = false;
-            grabbedItem.solidify();
-
-            // If Alt is held, create a copy immediately
-            if (keyIsDown(ALT)) {
-                let copy = new FloatingShape();
-                copy.type = grabbedItem.type;
-                copy.shapeType = grabbedItem.shapeType;
-                copy.size = grabbedItem.size;
-                copy.scaleFactor = grabbedItem.scaleFactor;
-                copy.rotation = grabbedItem.rotation;
-                copy.color = grabbedItem.color;
-                copy.content = grabbedItem.content;
-                copy.font = grabbedItem.font;
-                copy.textScaleAdjust = grabbedItem.textScaleAdjust;
-                copy.x = grabbedItem.x;
-                copy.y = grabbedItem.y;
-                copy.solidify();
-                placedItems.push(copy);
+    // Store original position when starting to drag
+    if (keyIsDown(ALT)) {
+        for (let i = placedItems.length - 1; i >= 0; i--) {
+            if (placedItems[i].isMouseOver(mouseX, mouseY)) {
+                grabbedItem = placedItems[i];
+                grabbedItem.isGrabbed = true;
+                grabbedItem.isPlacing = false;
+                grabbedItem.originalX = grabbedItem.x;
+                grabbedItem.originalY = grabbedItem.y;
+                // Create a temporary copy for dragging
+                draggedCopy = new FloatingShape();
+                draggedCopy.type = grabbedItem.type;
+                draggedCopy.shapeType = grabbedItem.shapeType;
+                draggedCopy.size = grabbedItem.size;
+                draggedCopy.scaleFactor = grabbedItem.scaleFactor;
+                draggedCopy.rotation = grabbedItem.rotation;
+                draggedCopy.color = grabbedItem.color;
+                draggedCopy.content = grabbedItem.content;
+                draggedCopy.font = grabbedItem.font;
+                draggedCopy.textScaleAdjust = grabbedItem.textScaleAdjust;
+                draggedCopy.x = grabbedItem.x;
+                draggedCopy.y = grabbedItem.y;
+                return false;
             }
-
-            let temp = placedItems.splice(i, 1)[0];
-            shapes.push(temp);
-
-            if (grabbedItem.type === 'text') {
-                inputElement.value(grabbedItem.content || '');
-                inputElement.attribute('placeholder', '');
-                inputElement.elt.focus();
-            } else {
-                inputElement.value('');
-                inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-                inputElement.elt.blur();
-            }
-            return false;
         }
-    }
 
-    // Check for clicks on floating shapes
-    for (let i = shapes.length - 1; i >= 0; i--) {
-        if (!shapes[i].isGrabbed && shapes[i].isMouseOver(mouseX, mouseY)) {
-            grabbedItem = shapes[i];
-            grabbedItem.isGrabbed = true;
-            grabbedItem.isPlacing = false;
-            grabbedItem.solidify();
-
-            // If Alt is held, create a copy immediately
-            if (keyIsDown(ALT)) {
-                let copy = new FloatingShape();
-                copy.type = grabbedItem.type;
-                copy.shapeType = grabbedItem.shapeType;
-                copy.size = grabbedItem.size;
-                copy.scaleFactor = grabbedItem.scaleFactor;
-                copy.rotation = grabbedItem.rotation;
-                copy.color = grabbedItem.color;
-                copy.content = grabbedItem.content;
-                copy.font = grabbedItem.font;
-                copy.textScaleAdjust = grabbedItem.textScaleAdjust;
-                copy.x = grabbedItem.x;
-                copy.y = grabbedItem.y;
-                copy.speedX = random(-1.5, 1.5);
-                copy.speedY = random(-1.5, 1.5);
-                copy.rotationSpeed = random(-0.003, 0.003);
-                shapes.push(copy);
+        for (let i = shapes.length - 1; i >= 0; i--) {
+            if (!shapes[i].isGrabbed && shapes[i].isMouseOver(mouseX, mouseY)) {
+                grabbedItem = shapes[i];
+                grabbedItem.isGrabbed = true;
+                grabbedItem.isPlacing = false;
+                grabbedItem.originalX = grabbedItem.x;
+                grabbedItem.originalY = grabbedItem.y;
+                // Create a temporary copy for dragging
+                draggedCopy = new FloatingShape();
+                draggedCopy.type = grabbedItem.type;
+                draggedCopy.shapeType = grabbedItem.shapeType;
+                draggedCopy.size = grabbedItem.size;
+                draggedCopy.scaleFactor = grabbedItem.scaleFactor;
+                draggedCopy.rotation = grabbedItem.rotation;
+                draggedCopy.color = grabbedItem.color;
+                draggedCopy.content = grabbedItem.content;
+                draggedCopy.font = grabbedItem.font;
+                draggedCopy.textScaleAdjust = grabbedItem.textScaleAdjust;
+                draggedCopy.x = grabbedItem.x;
+                draggedCopy.y = grabbedItem.y;
+                return false;
             }
+        }
+    } else {
+        // Normal grab behavior without Alt
+        for (let i = placedItems.length - 1; i >= 0; i--) {
+            if (placedItems[i].isMouseOver(mouseX, mouseY)) {
+                grabbedItem = placedItems[i];
+                grabbedItem.isGrabbed = true;
+                grabbedItem.isPlacing = false;
+                grabbedItem.solidify();
 
-            let temp = shapes.splice(i, 1)[0];
-            shapes.push(temp);
+                let temp = placedItems.splice(i, 1)[0];
+                shapes.push(temp);
 
-            if (grabbedItem.type === 'text') {
-                inputElement.value(grabbedItem.content || '');
-                inputElement.attribute('placeholder', '');
-                inputElement.elt.focus();
-            } else {
-                inputElement.value('');
-                inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-                inputElement.elt.blur();
+                if (grabbedItem.type === 'text') {
+                    inputElement.value(grabbedItem.content || '');
+                    inputElement.attribute('placeholder', '');
+                    inputElement.elt.focus();
+                } else {
+                    inputElement.value('');
+                    inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+                    inputElement.elt.blur();
+                }
+                return false;
             }
-            return false;
+        }
+
+        for (let i = shapes.length - 1; i >= 0; i--) {
+            if (!shapes[i].isGrabbed && shapes[i].isMouseOver(mouseX, mouseY)) {
+                grabbedItem = shapes[i];
+                grabbedItem.isGrabbed = true;
+                grabbedItem.isPlacing = false;
+                grabbedItem.solidify();
+
+                let temp = shapes.splice(i, 1)[0];
+                shapes.push(temp);
+
+                if (grabbedItem.type === 'text') {
+                    inputElement.value(grabbedItem.content || '');
+                    inputElement.attribute('placeholder', '');
+                    inputElement.elt.focus();
+                } else {
+                    inputElement.value('');
+                    inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+                    inputElement.elt.blur();
+                }
+                return false;
+            }
         }
     }
 
