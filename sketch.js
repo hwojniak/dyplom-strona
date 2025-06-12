@@ -1157,6 +1157,7 @@ function mousePressed() {
 function mouseReleased() {
     if (grabbedItem) {
         let wasTextItem = grabbedItem.type === 'text';
+        let wasPlacedItem = placedItems.includes(grabbedItem);
         
         // If Alt was held during the drag, create a copy at the release position
         if (keyIsDown(ALT)) {
@@ -1175,8 +1176,18 @@ function mouseReleased() {
             // Position the copy at the release position
             copy.x = grabbedItem.x;
             copy.y = grabbedItem.y;
-            // Add the copy to shapes array
-            shapes.push(copy);
+            
+            // If the original was a placed item, place the copy on the artboard too
+            if (wasPlacedItem) {
+                copy.solidify();
+                placedItems.push(copy);
+            } else {
+                // If original was floating, make the copy float too
+                copy.speedX = random(-1.5, 1.5);
+                copy.speedY = random(-1.5, 1.5);
+                copy.rotationSpeed = random(-0.003, 0.003);
+                shapes.push(copy);
+            }
             
             // Clear the grabbed state
             grabbedItem.isGrabbed = false;
