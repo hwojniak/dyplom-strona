@@ -3,6 +3,7 @@
 let shapes = []; // Shapes currently floating or grabbed (Includes temporarily grabbed placed items)
 let placedItems = []; // Items placed and solidified on the central canvas
 let grabbedItem = null; // The shape currently being dragged
+let draggedCopy = null; // Temporary copy of the grabbed item for dragging
 
 // UI Element References (DOM elements need global vars if you create them this way)
 let inputElement;
@@ -846,6 +847,13 @@ function draw() {
       item.updateLanding(); // Update landing animation for placed items
   }
 
+  // Draw the dragged copy if it exists
+  if (draggedCopy) {
+      draggedCopy.x = mouseX;
+      draggedCopy.y = mouseY;
+      draggedCopy.display(canvasPG, true);
+  }
+
   // --- Draw floating shapes on main canvas (behind artboard) ---
   // Draw shapes that are not currently grabbed
   for (let i = 0; i < shapes.length; i++) {
@@ -1107,6 +1115,19 @@ function mousePressed() {
                 grabbedItem.isPlacing = false;
                 grabbedItem.originalX = grabbedItem.x;
                 grabbedItem.originalY = grabbedItem.y;
+                // Create a temporary copy for dragging
+                draggedCopy = new FloatingShape();
+                draggedCopy.type = grabbedItem.type;
+                draggedCopy.shapeType = grabbedItem.shapeType;
+                draggedCopy.size = grabbedItem.size;
+                draggedCopy.scaleFactor = grabbedItem.scaleFactor;
+                draggedCopy.rotation = grabbedItem.rotation;
+                draggedCopy.color = grabbedItem.color;
+                draggedCopy.content = grabbedItem.content;
+                draggedCopy.font = grabbedItem.font;
+                draggedCopy.textScaleAdjust = grabbedItem.textScaleAdjust;
+                draggedCopy.x = grabbedItem.x;
+                draggedCopy.y = grabbedItem.y;
                 return false;
             }
         }
@@ -1118,6 +1139,19 @@ function mousePressed() {
                 grabbedItem.isPlacing = false;
                 grabbedItem.originalX = grabbedItem.x;
                 grabbedItem.originalY = grabbedItem.y;
+                // Create a temporary copy for dragging
+                draggedCopy = new FloatingShape();
+                draggedCopy.type = grabbedItem.type;
+                draggedCopy.shapeType = grabbedItem.shapeType;
+                draggedCopy.size = grabbedItem.size;
+                draggedCopy.scaleFactor = grabbedItem.scaleFactor;
+                draggedCopy.rotation = grabbedItem.rotation;
+                draggedCopy.color = grabbedItem.color;
+                draggedCopy.content = grabbedItem.content;
+                draggedCopy.font = grabbedItem.font;
+                draggedCopy.textScaleAdjust = grabbedItem.textScaleAdjust;
+                draggedCopy.x = grabbedItem.x;
+                draggedCopy.y = grabbedItem.y;
                 return false;
             }
         }
@@ -1196,8 +1230,8 @@ function mouseReleased() {
             copy.textScaleAdjust = grabbedItem.textScaleAdjust;
             
             // Position the copy at the release position
-            copy.x = grabbedItem.x;
-            copy.y = grabbedItem.y;
+            copy.x = mouseX;
+            copy.y = mouseY;
             
             // Return original item to its starting position
             grabbedItem.x = grabbedItem.originalX;
@@ -1237,7 +1271,8 @@ function mouseReleased() {
             inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
             inputElement.elt.blur();
             
-            // Clear grabbed state
+            // Clear dragged copy and grabbed state
+            draggedCopy = null;
             grabbedItem.isGrabbed = false;
             grabbedItem = null;
             return;
