@@ -1092,14 +1092,10 @@ function windowResized() {
 }
 
 function mousePressed() {
-    // If pop-up is open, ignore all mouse presses on the canvas
-    if (isHelpPopupOpen) {
-        return true;
-    }
-
-    // Check if mouse is over the header or UI elements
+    // Ignore clicks in the header area
     if (mouseY < HEADER_HEIGHT) {
         // Check if click was on a DOM element in the header (e.g. button)
+        // If so, allow default behavior. Otherwise, if on empty header space, do nothing.
         let clickedOnHeaderDOM = false;
         if (event && event.target) {
             if(event.target === inputElement.elt ||
@@ -1108,7 +1104,7 @@ function mousePressed() {
                (clearButton && event.target === clearButton.elt) ||
                (refreshButton && event.target === refreshButton.elt)) {
                 clickedOnHeaderDOM = true;
-                // Focus canvas after button click
+                // Add this: Focus canvas after button click
                 if (canvas && canvas.elt && typeof canvas.elt.focus === 'function') {
                     setTimeout(() => canvas.elt.focus(), 0);
                 }
@@ -1117,12 +1113,7 @@ function mousePressed() {
         return clickedOnHeaderDOM; // Allow default if on a UI element, else consume
     }
 
-    // If something is already grabbed, ignore subsequent mouse presses until released
-    if (grabbedItem) { 
-        return false; 
-    }
-
-    // Check if we're clicking inside the artboard area
+    // First check if we're clicking on the artboard
     let isClickingOnArtboard = isMouseOverCanvasArea(mouseX, mouseY);
 
     // Store original position when starting to drag
