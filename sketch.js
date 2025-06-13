@@ -1113,44 +1113,80 @@ function mousePressed() {
         return clickedOnHeaderDOM; // Allow default if on a UI element, else consume
     }
 
-    // If an item is already grabbed, check if the click is on the grabbed item itself
-    if (grabbedItem) {
-        if (grabbedItem.isMouseOver(mouseX, mouseY)) {
-            if (grabbedItem.type === 'text') inputElement.elt.focus();
-            return false;
-        }
-        return false; // Ignore clicks outside the grabbed item while dragging
-    }
-
-    // Check if we're clicking on the artboard
-    let isOverCanvasArea = isMouseOverCanvasArea(mouseX, mouseY);
-
-    // First check placed items (they should be on top)
-    for (let i = placedItems.length - 1; i >= 0; i--) {
-        if (placedItems[i].isMouseOver(mouseX, mouseY)) {
-            grabbedItem = placedItems[i];
-            grabbedItem.isGrabbed = true;
-            grabbedItem.isPlacing = false;
-            grabbedItem.solidify();
-
-            let temp = placedItems.splice(i, 1)[0];
-            shapes.push(temp);
-
-            if (grabbedItem.type === 'text') {
-                inputElement.value(grabbedItem.content || '');
-                inputElement.attribute('placeholder', '');
-                inputElement.elt.focus();
-            } else {
-                inputElement.value('');
-                inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
-                inputElement.elt.blur();
+    // Store original position when starting to drag
+    if (keyIsDown(ALT)) {
+        for (let i = placedItems.length - 1; i >= 0; i--) {
+            if (placedItems[i].isMouseOver(mouseX, mouseY)) {
+                grabbedItem = placedItems[i];
+                grabbedItem.isGrabbed = true;
+                grabbedItem.isPlacing = false;
+                grabbedItem.originalX = grabbedItem.x;
+                grabbedItem.originalY = grabbedItem.y;
+                // Create a temporary copy for dragging
+                draggedCopy = new FloatingShape();
+                draggedCopy.type = grabbedItem.type;
+                draggedCopy.shapeType = grabbedItem.shapeType;
+                draggedCopy.size = grabbedItem.size;
+                draggedCopy.scaleFactor = grabbedItem.scaleFactor;
+                draggedCopy.rotation = grabbedItem.rotation;
+                draggedCopy.color = grabbedItem.color;
+                draggedCopy.content = grabbedItem.content;
+                draggedCopy.font = grabbedItem.font;
+                draggedCopy.textScaleAdjust = grabbedItem.textScaleAdjust;
+                draggedCopy.x = grabbedItem.x;
+                draggedCopy.y = grabbedItem.y;
+                return false;
             }
-            return false;
         }
-    }
 
-    // Only check floating shapes if we're not over the artboard
-    if (!isOverCanvasArea) {
+        for (let i = shapes.length - 1; i >= 0; i--) {
+            if (!shapes[i].isGrabbed && shapes[i].isMouseOver(mouseX, mouseY)) {
+                grabbedItem = shapes[i];
+                grabbedItem.isGrabbed = true;
+                grabbedItem.isPlacing = false;
+                grabbedItem.originalX = grabbedItem.x;
+                grabbedItem.originalY = grabbedItem.y;
+                // Create a temporary copy for dragging
+                draggedCopy = new FloatingShape();
+                draggedCopy.type = grabbedItem.type;
+                draggedCopy.shapeType = grabbedItem.shapeType;
+                draggedCopy.size = grabbedItem.size;
+                draggedCopy.scaleFactor = grabbedItem.scaleFactor;
+                draggedCopy.rotation = grabbedItem.rotation;
+                draggedCopy.color = grabbedItem.color;
+                draggedCopy.content = grabbedItem.content;
+                draggedCopy.font = grabbedItem.font;
+                draggedCopy.textScaleAdjust = grabbedItem.textScaleAdjust;
+                draggedCopy.x = grabbedItem.x;
+                draggedCopy.y = grabbedItem.y;
+                return false;
+            }
+        }
+    } else {
+        // Normal grab behavior without Alt
+        for (let i = placedItems.length - 1; i >= 0; i--) {
+            if (placedItems[i].isMouseOver(mouseX, mouseY)) {
+                grabbedItem = placedItems[i];
+                grabbedItem.isGrabbed = true;
+                grabbedItem.isPlacing = false;
+                grabbedItem.solidify();
+
+                let temp = placedItems.splice(i, 1)[0];
+                shapes.push(temp);
+
+                if (grabbedItem.type === 'text') {
+                    inputElement.value(grabbedItem.content || '');
+                    inputElement.attribute('placeholder', '');
+                    inputElement.elt.focus();
+                } else {
+                    inputElement.value('');
+                    inputElement.attribute('placeholder', TEXT_OPTIONS[0]);
+                    inputElement.elt.blur();
+                }
+                return false;
+            }
+        }
+
         for (let i = shapes.length - 1; i >= 0; i--) {
             if (!shapes[i].isGrabbed && shapes[i].isMouseOver(mouseX, mouseY)) {
                 grabbedItem = shapes[i];
